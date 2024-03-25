@@ -6,7 +6,7 @@ library(glmnet)
 
 
 # Load String data ####
-wrkfldr <- "/mnt/data/user/david/lasso"
+wrkfldr <- "/mnt/data/user/david/lasso/"
 
 ppi <- fread("C:/Users/Dafydd/Documents/Projects/lasso_PPI/9606.protein.links.v12.0.txt")
 ppi <- fread("/mnt/data/user/david/9606.protein.links.v12.0.txt")
