@@ -24,7 +24,7 @@ ppi$gene2 <- gene_info$hgnc_symbol[match(ppi$protein2, gene_info$ensembl_peptide
 
 # Load DepMap data ####
 # load("C:/Users/Dafydd/Documents/Projects/lasso_PPI/global.RData")
-load(paste0("/global.RData"))
+load(paste0(wrkfldr,"/global.RData"))
 
 
 # Define helper functions ####
