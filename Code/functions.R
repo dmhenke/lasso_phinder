@@ -118,7 +118,9 @@ run_reg_lasso <- function(X, y, scores,
           penalty.factor = 1 - penalties * best_phi)
     betas_pen <- afit$beta[,1]
   
-    return(data.frame(
-          betas,
-          betas_pen))
+    return(
+      list(best_phi,
+           best_phi_correl,
+           correlations = correls,
+           betas = data.frame(betas, betas_pen)))
   }
