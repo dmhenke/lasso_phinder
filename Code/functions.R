@@ -56,33 +56,33 @@ find_best_phi <- function(correls, phi_range, plot = T){
 run_reg_lasso <- function(X, y, scores,
                           n_folds = 10,
                           phi_range = seq(0, 1, length = 30)){
-
+  
   lambda_min <- find_lambda(X, y, plot = F)
-
+  
   print(paste("Lambda min:", lambda_min))
-
+  
   afit <- glmnet(
     X, y,
     alpha = 1,
     lambda = lambda_min)
   betas <- afit$beta[,1]
-
+  
   if(sum(betas) == 0){
     print("All betas are zero.")
     return(NA)
   }
-
+  
   penalties <- scores[match(colnames(X), names(scores))]
   names(penalties) <- colnames(X)
   penalties[is.na(penalties)] <- 0
   penalties <- penalties/max(scores)
-
+  
   asplits <- suppressWarnings(split(sample(1:nrow(X)), 1:n_folds))
-
+  
   correls <- do.call(rbind, lapply(names(asplits), function(x){
     train <- unlist(asplits[setdiff(names(asplits), x)])
     test <- unlist(asplits[x])
-
+    
     unlist(lapply(phi_range, function(phi){
       lasso_tr <- glmnet(
         X[train,],
@@ -92,7 +92,7 @@ run_reg_lasso <- function(X, y, scores,
         pred <- predict(
           lasso_tr,
           X[test,])
-  
+      
         cor(pred, y[test])
       }))
     }))
