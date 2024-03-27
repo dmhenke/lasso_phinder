@@ -7,6 +7,7 @@ get_scores <- function(gene, ppi){
   tmp <- ppi[(ppi$gene1 %in% c(gene) | 
                 ppi$gene2 %in% c(gene)), ]
   tmp <- tmp[tmp$gene1 != "" & tmp$gene2 != "", ]
+  tmp <- na.omit(tmp)
   scores <- as.numeric(tmp[["combined_score"]][tmp$gene1 == gene])
   names(scores) <- as.character(tmp[["gene2"]][tmp$gene1 == gene])
   scores[gene] <- 1000
@@ -25,8 +26,8 @@ find_lambda <- function(X, y, plot = T){
   fitcv$lambda.1se # more conservative vs 'lambda.min'
 }
 
-
-## Calculate best phi ####
+## Given matrix of correlation between predicted and observed values from
+# cross-validation across range of phi values, find best phi ####
 find_best_phi <- function(correls, phi_range, plot = T){
   median_correls <- unlist(lapply(split(correls$cor,correls$phi), median))
   median_rmse <- unlist(lapply(split(correls$rmse,correls$phi), median))
@@ -36,7 +37,6 @@ find_best_phi <- function(correls, phi_range, plot = T){
     cor = median_correls,
     rmse = median_rmse)
   
-  # afit <- lm(cor ~ phi, data = aframe[c(1, nrow(aframe)), ])
   afit <- lm(cor ~ phi, data = aframe[c(1, nrow(aframe)), ])
   preds <- predict(afit, aframe)
   diff_corr <- aframe$cor - preds
@@ -94,11 +94,15 @@ run_reg_lasso <- function(X, y, scores,
     alpha = 1, 
     lambda = lambda_min)
   betas <- afit$beta[,1]
-  
+  # sniff test #
+  if(sum(betas) == 0){
+    print("All betas are zero.")
+    return(NA)
+  }
   penalties <- scores[match(colnames(X), names(scores))]
   names(penalties) <- colnames(X)
   penalties[is.na(penalties)] <- 0
-  penalties <- penalties/1000
+  penalties <- penalties/max(scores)
   
   asplits <- suppressWarnings(split(sample(1:nrow(X)), 1:n_folds))
   
@@ -119,33 +123,36 @@ run_reg_lasso <- function(X, y, scores,
       data.frame(cor=cor(pred, y[test]) ,rmse=rmse,run=x,phi=phi)
     }))
   }))
+  if(length(unique(dim(correls) == dim(na.omit(correls)))) == 2){
+    print("Missing values in correlation.")
+    return(NA)
+  }
   
-  best_phi <- find_best_phi(correls, phi_range)$best_cor_phi
+  best_phi <- find_best_phi(correls, phi_range)
+  best_phi_cor <- best_phi$best_cor_phi
+  print(paste("Phi best:", round(best_phi_cor,4)))
   
-  
+  # Update lambda and rerun LASSO
   afit <- glmnet(
     X,
     y,
     alpha = 1,
     lambda = lambda_min,
-    penalty.factor = 1 - penalties * best_phi)
+    penalty.factor = 1 - penalties * best_phi_cor)
   betas_pen <- afit$beta[,1]
   
-  best_phi <- find_best_phi(correls, phi_range, plot = F)$best_cor_phi
+  # write outs ####
+  # phis ##
+  write.csv(best_phi,file=paste0(wrkfldr,gene,'_phibest.csv'))
+  # cor & rmse & phi ##
+  write.csv(correls,file=paste0(wrkfldr,gene,'_phibest.csv'))
+  # betas ##
+  write.csv(data.frame(betas, betas_pen),file=paste0(wrkfldr,gene,'_phibest.csv'))
   
-  print(paste("Phi best:", round(best_phi,4)))
-  
-  afit <- glmnet(
-    X,
-    y,
-    alpha = 1,
-    lambda = lambda_min,
-    penalty.factor = 1 - penalties * best_phi)
-  betas_pen <- afit$beta[,1]
-  
-  return(data.frame(
-    betas, 
-    betas_pen))
+  return(list(best_phi,
+              best_phi_cor,
+              correlations = correls,
+              betas = data.frame(betas, betas_pen)))
 }
 
 
