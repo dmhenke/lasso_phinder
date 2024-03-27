@@ -48,14 +48,6 @@ find_best_phi <- function(correls, phi_range, plot = T){
   best_rmse_phi <- phi_range[which(diff_rmse == min(diff_rmse))]
   
   if(plot){
-    # ggplot(aframe, aes(phi, cor)) +
-    #   labs(
-    #     x = 'phi',
-    #     y = 'Correlation'
-    #   ) +
-    #   geom_vline(xintercept = best_phi, linetype = "dashed") +
-    #   geom_point() +
-    #   theme_classic()
     aframe$size=1;aframe$size[aframe$phi%in% c(best_cor_phi,best_rmse_phi)]<-2
     ggplot(aframe, aes(rmse, cor,color=phi,size=size)) +
       labs(
