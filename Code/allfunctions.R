@@ -1,4 +1,9 @@
 # All functions for project #
+
+R libs
+library(glmnet)
+
+#
 if(!'wrkfldr'%in%ls()) wrkfldr < getwd()
 
 # Define helper functions ####
