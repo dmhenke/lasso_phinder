@@ -1,5 +1,5 @@
 # All functions for project #
-
+if(!'wrkfldr'%in%ls()) wrkfldr < getwd()
 
 # Define helper functions ####
 ## Get Association Scores ####
