@@ -1,10 +1,7 @@
 # All functions for project #
 
-R libs
+# R libs
 library(glmnet)
-
-#
-if(!'wrkfldr'%in%ls()) wrkfldr < getwd()
 
 # Define helper functions ####
 ## Get Association Scores ####
@@ -24,7 +21,6 @@ find_lambda <- function(X, y, plot = T){
   fitcv <- cv.glmnet(
     X, y, 
     alpha = 1, 
-    nfolds = round(nrow(X)/30,0),
     lambda = NULL)
   if(plot) plot(fitcv, xvar = "lambda", label = T)
   # fitcv$lambda.min
@@ -138,14 +134,7 @@ run_reg_lasso <- function(X, y, scores,
     penalty.factor = 1 - penalties * best_phi_cor)
   betas_pen <- afit$beta[,1]
   
-  # write outs ####
-  # phis ##
-  write.csv(best_phi,file=paste0(wrkfldr,gene,'_phibest.csv'))
-  # cor & rmse & phi ##
-  write.csv(correls,file=paste0(wrkfldr,gene,'_phibest.csv'))
-  # betas ##
-  write.csv(data.frame(betas, betas_pen),file=paste0(wrkfldr,gene,'_phibest.csv'))
-  
+
   return(list(best_phi,
               best_phi_cor,
               correlations = correls,
