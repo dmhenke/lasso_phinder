@@ -140,5 +140,3 @@ run_reg_lasso <- function(X, y, scores,
               correlations = correls,
               betas = data.frame(betas, betas_pen)))
 }
-
-
