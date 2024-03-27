@@ -376,3 +376,21 @@ phiout <- mclapply(gene_sample2[1:2],function(gene){
 },mc.cores = 10)
 
 do.call(rbind,phiout)
+
+
+# hold for later
+
+# # write outs ####
+# # phis ##
+# write.csv(best_phi,file=paste0(wrkfldr,gene,'_phibest.csv'))
+# # cor & rmse & phi ##
+# write.csv(correls,file=paste0(wrkfldr,gene,'_corrmse.csv'))
+# # betas ##
+# write.csv(data.frame(betas, betas_pen),file=paste0(wrkfldr,gene,'_beta.csv'))
+# 
+
+
+
+
+
+
