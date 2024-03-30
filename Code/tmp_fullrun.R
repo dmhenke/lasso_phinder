@@ -28,7 +28,8 @@ expressed <- apply(X, 2, function(x) mean(x > 0))
 X <- X[, expressed > 0.95]
 X <- apply(X, 2, function(x)
   (x - mean(x))/sd(x))
-
+gene_sample <- c("MYC",sample(colnames(kronos),100))
+           
 res <- mclapply(gene_sample,function(gene){
   y <- y[, gene]
   scores <- get_scores(gene, ppi)
