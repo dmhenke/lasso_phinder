@@ -8,6 +8,9 @@ library(parallel)
 # Set work folder ####
 wrkfldr <- "/mnt/data/user/david/lasso/"
 # Load data ####
+# Load Depmap data ####
+load(paste0(wrkfldr,"../Data/global.RData"))
+
 ppi <- fread(paste0(wrkfldr,"9606.protein.links.v12.0.txt"))
 ppi$protein1 <- gsub("9606.", "", ppi$protein1, fixed = T)
 ppi$protein2 <- gsub("9606.", "", ppi$protein2, fixed = T)
