@@ -28,7 +28,7 @@ find_lambda <- function(X, y, plot = T){
 }
 
 ## Given matrix of correlation between predicted and observed values from
-# cross-validation across range of phi values, find best phi ####
+## cross-validation across range of phi values, find best phi ####
 find_best_phi_rmse <- function(correls, phi_range, plot = T){
   median_rmse <- apply(correls, 1, median)
   
@@ -56,7 +56,7 @@ find_best_phi_rmse <- function(correls, phi_range, plot = T){
   return(best_rmse_phi)
 }
 
-# Get rmse values from cross-validation ####
+## Get rmse values from cross-validation ####
 get_rmse_from_xvalid <- function(X, y, penalties){
   asplits <- suppressWarnings(split(sample(1:nrow(X)), 1:n_folds))
   
@@ -114,7 +114,7 @@ run_reg_lasso <- function(X, y, scores,
     return(NA)
   }
   
-  best_phi <- find_best_phi_rmse(correls, phi_range, plot = F)
+  best_phi <- find_best_phi_rmse(correls, phi_range, plot = T)
 
   print(paste("Best phi based on RMSE:", round(best_phi, 4)))
   
