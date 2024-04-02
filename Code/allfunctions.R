@@ -39,6 +39,7 @@ find_best_phi <- function(correls, phi_range, plot = T){
     rmse = median_rmse)
   
   afit <- lm(cor ~ phi, data = aframe[c(1, nrow(aframe)), ])
+  # qfit <- lm(data=correls,formula="rmse~poly(phi,2)+run")
   preds <- predict(afit, aframe)
   diff_corr <- aframe$cor - preds
   afit2 <- lm(rmse ~ phi, data = aframe[c(1, nrow(aframe)), ])
@@ -68,6 +69,23 @@ find_best_phi <- function(correls, phi_range, plot = T){
       geom_point() +
       geom_abline(intercept =afit$coefficients[1],slope = afit$coefficients[2] )+
       theme_classic()
+    # rmse vs phi
+    ggplot(aframe, aes(phi, cor,color=phi,size=size)) +
+      labs(
+        x = 'Phi',
+        y = 'Correlation'
+      ) +
+      geom_point() +
+      geom_abline(intercept =afit$coefficients[1],slope = afit$coefficients[2] )+
+      theme_classic()+geom_vline(xintercept = best_cor_phi)
+    ggplot(aframe, aes(phi, rmse,color=phi,size=size)) +
+      labs(
+        x = 'Phi',
+        y = 'RMSE'
+      ) +
+      geom_point() +
+      geom_abline(intercept =afit$coefficients[1],slope = afit$coefficients[2] )+
+      theme_classic()+geom_vline(xintercept = best_cor_phi)
   }
   
   return(data.frame(best_cor_phi,best_rmse_phi))
@@ -122,7 +140,7 @@ run_reg_lasso <- function(X, y, scores,
   }
   
   best_phi <- find_best_phi(correls, phi_range)
-  best_phi_cor <- best_phi$best_cor_phi
+  best_phi_cor <- best_phi$best_rmse_phi
   print(paste("Phi best:", round(best_phi_cor,4)))
   
   # Update lambda and rerun LASSO

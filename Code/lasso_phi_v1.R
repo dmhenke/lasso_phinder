@@ -8,7 +8,6 @@ library(glmnet)
 # Load String data ####
 
 ppi <- fread("../Data/9606.protein.links.v12.0.txt")
-ppi <- fread("../Data/9606.protein.links.v12.0.txt")
 
 ppi$protein1 <- gsub("9606.", "", ppi$protein1, fixed = T)
 ppi$protein2 <- gsub("9606.", "", ppi$protein2, fixed = T)
@@ -23,7 +22,7 @@ ppi$gene2 <- gene_info$hgnc_symbol[match(ppi$protein2, gene_info$ensembl_peptide
 
 # Load DepMap data ####
 # load("C:/Users/Dafydd/Documents/Projects/lasso_PPI/global.RData")
-load(paste0(wrkfldr,"../Data/global.RData"))
+load(paste0("../Data/global.RData"))
 
 
 # Load functions ####
@@ -52,3 +51,14 @@ gene_sample2 <- c("KDM5D","SOX10","FAM50A","RPP25L","PAX8","KRTAP4-11",
 gene_sample2 <-gene_sample2[gene_sample2%in%colnames(kronos)]
 
 
+library("parallel")
+
+phiout <- mclapply(gene_sample2[1:2],function(gene){
+  y <- y[, gene]
+  scores <- get_scores(gene, ppi)
+  out <- run_reg_lasso(
+    X, y, scores,
+    n_folds = 10, phi_range = seq(0, 1, length = 30))
+  save(out,file=paste0("../Outputs/",gene,'.RData'))
+  return(out)
+},mc.cores = 10)
