@@ -1,5 +1,6 @@
 # Load R libs ####
 library(caret)
+library(data.table)
 library(ggplot2)
 library(glmnet)
 
@@ -31,7 +32,7 @@ X_cnv <- na.omit(X_cnv)
 
 
 # Define mutation table ####
-tmp <- fread("/Users/lukas/Downloads/Damaging_Mutations.csv")
+tmp <- fread("../Data/Damaging_Mutations.csv")
 mut <- data.matrix(tmp[,-1])
 mut <- apply(mut, 2, function(x)
   as.numeric(x > 0))
@@ -40,14 +41,15 @@ X_mut <- mut
 
 
 # Define outcome ####
-gene <- "SF3B1"
+gene <- "PKMYT1"
 y <- demeter2[, gene]
-#y <- kronos[, gene]
+y <- kronos[, gene]
 y <- y[!is.na(y)]
 
 tissue <- sample_info[names(y), "lineage"]
 y_resid <- residuals(lm(y ~ tissue))
 y <- y_resid
+
 
 # Find overlapping cell lines ####
 ok_cells <- intersect(names(y), rownames(X_rna))
@@ -113,9 +115,15 @@ names(penalties) <- genes
 penalties[is.na(penalties)] <- 0
 penalties <- penalties/max(scores)
 
-correls <- get_rmse_from_xvalid(X, y , penalties)
+correls <- get_rmse_from_xvalid(
+  X, y,
+  penalties,
+  lambda_min = lambda_min,
+  phi_range = seq(0, 1, length = 30), n_folds = 10)
 
-best_phi <- find_best_phi(correls, phi_range)
+best_phi <- find_best_phi_rmse(
+  correls,
+  phi_range = seq(0, 1, length = 30))
 
 afit <- glmnet(
   X,

@@ -38,7 +38,7 @@ find_best_phi_rmse <- function(correls, phi_range, plot = T){
   
   afit <- lm(rmse ~ phi, data = aframe[c(1, nrow(aframe)), ])
   preds <- predict(afit, aframe)
-  diff_rmse <- aframe$rmse - preds2
+  diff_rmse <- aframe$rmse - preds
   
   best_rmse_phi <- phi_range[which(diff_rmse == min(diff_rmse))]
   
@@ -57,7 +57,8 @@ find_best_phi_rmse <- function(correls, phi_range, plot = T){
 }
 
 ## Get rmse values from cross-validation ####
-get_rmse_from_xvalid <- function(X, y, penalties){
+get_rmse_from_xvalid <- function(
+    X, y, penalties, lambda_min, phi_range, n_folds = 10){
   asplits <- suppressWarnings(split(sample(1:nrow(X)), 1:n_folds))
   
   correls <- do.call(cbind, lapply(names(asplits), function(x){
@@ -107,7 +108,8 @@ run_reg_lasso <- function(X, y, scores,
   penalties[is.na(penalties)] <- 0
   penalties <- penalties/max(scores)
   
-  correls <- get_rmse_from_xvalid(X, y, penalties)
+  correls <- get_rmse_from_xvalid(
+    X, y, penalties, phi_range = phi_range, lambda_min = lambda_min, n_folds = n_folds)
   
   if(length(unique(dim(correls) == dim(na.omit(correls)))) == 2){
     print("Missing values in correlation.")
