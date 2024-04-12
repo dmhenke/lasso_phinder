@@ -33,21 +33,9 @@ find_best_phi <- function(correls, phi_range, plot = T){
   median_correls <- unlist(lapply(split(correls$cor,correls$phi), median))
   median_rmse <- unlist(lapply(split(correls$rmse,correls$phi), median))
   
-  aframe <- data.frame(
-    phi = phi_range, 
-    cor = median_correls,
-    rmse = median_rmse)
-  
-  afit <- lm(cor ~ phi, data = aframe[c(1, nrow(aframe)), ])
-  # qfit <- lm(data=correls,formula="rmse~poly(phi,2)+run")
-  preds <- predict(afit, aframe)
-  diff_corr <- aframe$cor - preds
-  afit2 <- lm(rmse ~ phi, data = aframe[c(1, nrow(aframe)), ])
-  preds2 <- predict(afit2, aframe)
-  diff_rmse <- aframe$rmse - preds2
-  
-  best_cor_phi <- phi_range[which(diff_corr == max(diff_corr))]
-  best_rmse_phi <- phi_range[which(diff_rmse == min(diff_rmse))]
+  # Find local minima
+  best_rmse_phi <- phi_range[which(diff(sign(diff(median_rmse))) > 0) + 1][1]
+  best_cor_phi <- phi_range[which(diff(sign(diff(median_correls))) > 0) + 1][1]
   
   if(plot){
     aframe$size=1;aframe$size[aframe$phi%in% c(best_cor_phi,best_rmse_phi)]<-2
