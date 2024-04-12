@@ -48,17 +48,25 @@ gene_sample2 <- c("KDM5D","SOX10","FAM50A","RPP25L","PAX8","KRTAP4-11",
                   "EBF1","IRF4","H2BC15","MYB","MDM2","OR4P4"    ,
                   "KRAS","NRAS","HNF1B","OR4C11","EIF1AX","POU2AF1",  
                   "TP63","BRAF","TTC7A","OR4S2")
+gene_sample <-gene_sample[gene_sample%in%colnames(kronos)]
 gene_sample2 <-gene_sample2[gene_sample2%in%colnames(kronos)]
 
 
 library("parallel")
 
-phiout <- mclapply(gene_sample2[1:2],function(gene){
-  y <- y[, gene]
-  scores <- get_scores(gene, ppi)
-  out <- run_reg_lasso(
-    X, y, scores,
-    n_folds = 10, phi_range = seq(0, 1, length = 30))
-  save(out,file=paste0("../Outputs/",gene,'.RData'))
-  return(out)
+phiout <- mclapply(gene_sample2,function(gene){
+  save_results_file <- paste0(gene,'.RData')
+  if(save_results_file%in%list.files(paste0("../Outputs/"))){
+    print(paste('alredy processed',gene))
+    NULL
+  }else{
+    print(paste('Processing',gene))
+    y <- y[, gene]
+    scores <- get_scores(gene, ppi)
+    out <- run_reg_lasso(
+      X, y, scores,
+      n_folds = 10, phi_range = seq(0, 1, length = 30))
+    save(out,file=paste0("../Outputs/",gene,'.RData'))
+    return(out)
+  }
 },mc.cores = 10)
