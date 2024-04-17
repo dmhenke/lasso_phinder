@@ -17,7 +17,7 @@ get_scores <- function(gene, ppi){
 }
 
 ## Calculate best lambda ####
-find_lambda <- function(X, y, plot = T){
+find_lambda <- function(X, y, plot = F){
   fitcv <- cv.glmnet(
     X, y, 
     alpha = 1, 
@@ -29,7 +29,7 @@ find_lambda <- function(X, y, plot = T){
 
 ## Given matrix of correlation between predicted and observed values from
 # cross-validation across range of phi values, find best phi ####
-find_best_phi <- function(correls, phi_range, plot = T){
+find_best_phi <- function(correls, phi_range, plot = F){
   median_correls <- unlist(lapply(split(correls$cor,correls$phi),function(j) sqrt(median(j**2))))
   median_rmse <- unlist(lapply(split(correls$rmse,correls$phi),function(j) sqrt(median(j**2))))
   
