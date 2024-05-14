@@ -1,6 +1,7 @@
 # All functions for project #
 
 # R libs
+library(ggplot2)
 library(glmnet)
 
 # Define helper functions ####
