@@ -36,16 +36,12 @@ chr_genes <- scan(
 X <- rnaseq
 expressed <- apply(X, 2, function(x) mean(x > 0))
 X <- X[, expressed > 0.95]
-X <- apply(X, 2, function(x)
-  (x - mean(x))/sd(x))
 X_rna <- X
 
 
 # Define CNV table ####
 X_cnv <- cnv
-X_cnv <- na.omit(X_cnv)
-X_cnv <- apply(X_cnv, 2, function(x)
-  (x - mean(x))/sd(x))
+X_cnv <- na.omit(log2(X_cnv))
 
 
 # Define mutation table ####
@@ -55,6 +51,7 @@ mut <- apply(mut, 2, function(x)
   as.numeric(x > 0))
 rownames(mut) <- tmp[[1]]
 X_mut <- mut
+X_mut <- X_mut[, colSums(X_mut) >= 5]
 
 
 # Run for list of genes on D2 ####
@@ -82,19 +79,23 @@ run_analysis <- function(y, gene){
   # Run LASSO ####
   scores <- get_scores(gene, ppi)
   
+  scale <- function(matr){
+    apply(matr, 2, function(x)
+      (x - mean(x))/sd(x))
+  }
+  
   results_rna <- run_reg_lasso(
-    X_rna_ok, y, scores,
+    scale(X_rna_ok), y, scores,
     n_folds = 10, phi_range = seq(0, 1, length = 30))
   
   results_cnv <- run_reg_lasso(
-    X_cnv_ok, y, scores,
+    scale(X_cnv_ok), y, scores,
     n_folds = 10, phi_range = seq(0, 1, length = 30))
   
   results_mut <- run_reg_lasso(
-    X_mut_ok, y, scores,
+    scale(X_mut_ok), y, scores,
     n_folds = 10, phi_range = seq(0, 1, length = 30))
   
-  # Combine non-zero coefficients into one X ####
   # Combine non-zero coefficients into one X ####
   betas <- list()
   if(length(results_cnv) == 3){
