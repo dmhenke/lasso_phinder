@@ -44,6 +44,8 @@ X_rna <- X
 # Define CNV table ####
 X_cnv <- cnv
 X_cnv <- na.omit(X_cnv)
+X_cnv <- apply(X_cnv, 2, function(x)
+  (x - mean(x))/sd(x))
 
 
 # Define mutation table ####
