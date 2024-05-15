@@ -4,3 +4,4 @@ Data/global.RData
 Data/Damaging_Mutations.csv
 Code/.Rhistory
 Outputs/d2_results_multiomic.RData
+Outputs/chr_results_multiomic.RData
