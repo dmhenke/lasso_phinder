@@ -17,16 +17,6 @@ load("../Data/ppi_w_symbols.RData")
 load("../Data/global.RData")
 
 
-# Read skewness genes ####
-d2_genes <- scan(
-  "../Data/skewed_d2_genes.txt",
-  what = character(), sep = "\n")
-
-chr_genes <- scan(
-  "../Data/skewed_chr_genes.txt",
-  what = character(), sep = "\n")
-
-
 # Normalize RNA expression data ####
 X <- rnaseq
 expressed <- apply(X, 2, function(x) mean(x > 0))
@@ -50,8 +40,28 @@ rownames(mut) <- tmp[[1]]
 X_mut <- mut
 
 
-# Run for list of genes on D2 ####
-run_analysis <- function(y){
+# Read skewness genes ####
+d2_genes <- scan(
+  "../Data/skewed_d2_genes.txt",
+  what = character(), sep = "\n")
+
+chr_genes <- scan(
+  "../Data/skewed_chr_genes.txt",
+  what = character(), sep = "\n")
+
+
+# Load LASSO results ####
+load("../Outputs/d2_results_multiomic.RData")
+res_d2 <- res
+names(res_d2) <- d2_genes
+
+load("../Outputs/chr_results_multiomic.RData")
+res_chr <- res
+names(res_chr) <- chr_genes
+
+
+# Define function ####
+run_analysis <- function(y, gene){
   
   # Find overlapping cell lines ####
   ok_cells <- intersect(names(y), rownames(X_rna))
@@ -91,19 +101,29 @@ run_analysis <- function(y){
   betas <- list()
   if(length(results_cnv) == 3){
     betas$CNV <- X_cnv_ok[, results_cnv$betas$betas_pen != 0]
+    if(class(betas$CNV)[1] == "numeric"){
+      betas$CNV <- matrix(betas$CNV, ncol = 1)
+    }
   }
   if(length(results_rna) == 3){
     betas$RNA <- X_rna_ok[, results_rna$betas$betas_pen != 0]
+    if(class(betas$RNA)[1] == "numeric"){
+      betas$RNA <- matrix(betas$RNA, ncol = 1)
+    }
   } 
   if(length(results_mut) == 3){
     betas$Mut <- X_mut_ok[, results_mut$betas$betas_pen != 0]
+    if(class(betas$Mut)[1] == "numeric"){
+      betas$Mut <- matrix(betas$Mut, ncol = 1)
+    }
   } 
   
   X_combined <- do.call(cbind, betas)
   
   genes <- unlist(lapply(betas, colnames))
-  omic <- unlist(lapply(names(betas), function(x)
-    rep(x, ncol(betas[[x]]))))
+  omic <- unlist(lapply(names(betas), function(x){
+    rep(x, ncol(betas[[x]])) 
+  }))
   
   
   # Run LASSO again ####
@@ -151,21 +171,24 @@ run_analysis <- function(y){
   return(aframe)
 }
 
-res <- lapply(sample(d2_genes, 2), function(x){
-  print(paste("Working on", x))
-  y <- demeter2[, x]
-  y <- y[!is.na(y)]
-  run_analysis(y)
-})
+gene <- "VPS13D"
+y <- kronos[, gene]
+out <- run_analysis(y, gene)
 
-save(res, file = "../Outputs/d2_results_multiomic.RData")
+# ####
+res <- res_d2
+bad <- which(unlist(lapply(res, class)) == "try-error")
+good <- names(res)[-bad]
+d2_combined <- do.call(rbind, lapply(good, function(x)
+  data.frame(target = x, res[[x]])))
+
+tmp <- d2_combined
+tmp <- tmp[tmp]
 
 
-# Run for list of genes on Chronos ####
-res <- lapply(sample(chr_genes, 2), function(x){
-  print(paste("Working on", x))
-  y <- kronos[, x]
-  run_analysis(y)
-})
+res <- res_chr
+bad <- which(unlist(lapply(res, class)) == "try-error")
+good <- names(res)[-bad]
+d2_combined <- do.call(rbind, lapply(good, function(x)
+  data.frame(target = x, res[[x]])))
 
-save(res, file = "../Outputs/chr_results_multiomic.RData")
