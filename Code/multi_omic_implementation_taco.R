@@ -96,19 +96,29 @@ run_analysis <- function(y, gene){
   betas <- list()
   if(length(results_cnv) == 3){
     betas$CNV <- X_cnv_ok[, results_cnv$betas$betas_pen != 0]
+    if(class(betas$CNV)[1] == "numeric"){
+      betas$CNV <- matrix(betas$CNV, ncol = 1)
+    }
   }
   if(length(results_rna) == 3){
     betas$RNA <- X_rna_ok[, results_rna$betas$betas_pen != 0]
+    if(class(betas$RNA)[1] == "numeric"){
+      betas$RNA <- matrix(betas$RNA, ncol = 1)
+    }
   } 
   if(length(results_mut) == 3){
     betas$Mut <- X_mut_ok[, results_mut$betas$betas_pen != 0]
+    if(class(betas$Mut)[1] == "numeric"){
+      betas$Mut <- matrix(betas$Mut, ncol = 1)
+    }
   } 
   
   X_combined <- do.call(cbind, betas)
   
   genes <- unlist(lapply(betas, colnames))
-  omic <- unlist(lapply(names(betas), function(x)
-    rep(x, ncol(betas[[x]]))))
+  omic <- unlist(lapply(names(betas), function(x){
+    rep(x, ncol(betas[[x]])) 
+  }))
   
   
   # Run LASSO again ####
