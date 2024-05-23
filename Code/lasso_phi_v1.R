@@ -323,6 +323,65 @@ lapply(names(res_cnv),function(nam){
       facet_grid(paste(CDK6_norm,ALK_norm)~.)
     
   }
-  # return(out_plt)
-  ggsave(paste0("../Outputs/graphics/",nam,"_kronos.pdf"),out_plt,width = 8,height = 4)
-})
+
+  y <- y[, gene]
+  scores <- get_scores(gene, ppi)
+  out <- run_reg_lasso_phionly(
+    X, y, scores,
+    n_folds = 10, phi_range = seq(0, 1, length = 30))
+  out$gene<- gene
+  return(out)
+}
+# Define X and y ####
+ok_cells <- intersect(
+  rownames(rnaseq),
+  rownames(kronos))
+
+X <- rnaseq[ok_cells, ]
+y <- kronos[ok_cells,]
+expressed <- apply(X, 2, function(x) mean(x > 0))
+X <- X[, expressed > 0.95]
+X <- apply(X, 2, function(x)
+  (x - mean(x))/sd(x))
+
+# save(list=ls(),paste0(wrkfldr,"/wrkspc.RData")
+# load(paste0(wrkfldr,"/wrkspc.RData")
+# Run command ####
+
+
+# test phi, corr vs rmse
+gene_sample <- c("MYC",sample(colnames(kronos),100))
+gene_sample2 <- c("KDM5D","SOX10","FAM50A","RPP25L","PAX8","KRTAP4-11",
+                  "EBF1","IRF4","H2BC15","MYB","MDM2","OR4P4"    ,
+                  "KRAS","NRAS","HNF1B","OR4C11","EIF1AX","POU2AF1",  
+                  "TP63","BRAF","TTC7A","OR4S2")
+gene_sample2 <-gene_sample2[gene_sample2%in%colnames(kronos)]
+
+###
+library("parallel")
+
+phiout <- mclapply(gene_sample2[1:2],function(gene){
+  y <- y[, gene]
+  scores <- get_scores(gene, ppi)
+  out <- run_reg_lasso_phionly(
+    X, y, scores,
+    n_folds = 10, phi_range = seq(0, 1, length = 30))
+  out$gene<- gene
+  write.csv(out,file=paste0(wrkfldr,gene,'.csv'))
+  return(out)
+},mc.cores = 10)
+
+do.call(rbind,phiout)
+
+
+# hold for later
+
+# # write outs ####
+# # phis ##
+# write.csv(best_phi,file=paste0(wrkfldr,gene,'_phibest.csv'))
+# # cor & rmse & phi ##
+# write.csv(correls,file=paste0(wrkfldr,gene,'_corrmse.csv'))
+# # betas ##
+# write.csv(data.frame(betas, betas_pen),file=paste0(wrkfldr,gene,'_beta.csv'))
+# 
+
