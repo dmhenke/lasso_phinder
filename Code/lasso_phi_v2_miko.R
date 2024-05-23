@@ -4,6 +4,9 @@ library(data.table)
 library(ggplot2)
 library(glmnet)
 
+## other ####
+if(Sys.info()['login']=="Dafydd") setwd("./Code/")
+
 
 # Source code ####
 source("allfunctions.R")
@@ -60,7 +63,6 @@ res_cnv <- lapply(gene_sample6,function(gene,scorObj='demeter2'){
   }
 y <- y[!is.na(y)]
 
-tissue <- sample_info[names(y), "lineage"]
 #y_resid <- residuals(lm(y ~ tissue))
 #y <- y_resid
 
@@ -82,6 +84,7 @@ X_cnv  <- X_cnv[ok_cells, ]
 X_cnv <- X_cnv[, apply(X_cnv, 2, var) > 0]
 
 y <- y[ok_cells]
+tissue <- sample_info[names(y), "lineage"]
 
 
 # Run LASSO ####
@@ -115,9 +118,6 @@ lapply(names(res_cnv),function(nam,scorObj='demeter2',res_cnv=res_cnv){
   }
   y <- y[!is.na(y)]
   
-  tissue <- sample_info[names(y), "lineage"]
-  #y_resid <- residuals(lm(y ~ tissue))
-  #y <- y_resid
   
   
   # Find overlapping cell lines ####
@@ -137,7 +137,10 @@ lapply(names(res_cnv),function(nam,scorObj='demeter2',res_cnv=res_cnv){
   X_cnv <- X_cnv[, apply(X_cnv, 2, var) > 0]
   
   y <- y[ok_cells]
-  
+  # tissue <- sample_info[names(y), "lineage"]
+  # y_resid <- residuals(lm(y ~ tissue))
+  # y <- y_resid
+
   ## Plot ####
 
   results_cnv <- res_cnv[[nam]]
@@ -155,7 +158,6 @@ lapply(names(res_cnv),function(nam,scorObj='demeter2',res_cnv=res_cnv){
 
 
   glabels <- tmp[order(abs(tmp$betas_pen),decreasing = T)[1:20],]
-  glabels <- tmp[order(abs(tmp$betas_pen),decreasing = T)[1:20],]
   # corr
   aframe <- data.frame(
     X_cnv[, c(nam, "KRAS", "NRAS","ALK")],
@@ -164,28 +166,34 @@ lapply(names(res_cnv),function(nam,scorObj='demeter2',res_cnv=res_cnv){
 
   # remove X,Y and non cononical chromosomes
   tmp <- tmp[tmp$chromosome_name %in% c(1:22),]
-  shaded_chrs <- c(as.character(seq(1,22,by=2)),'X',"MT")
+  shaded_chrs2 <- c(as.character(seq(1,22,by=2)),'X',"MT")
+  shaded_chrs <- c(as.character(seq(1,22,by=1)),'X',"MT")
   shaded_chrs <- shaded_chrs[shaded_chrs%in% unique(tmp$chromosome_name)]
   shad_block <- do.call(rbind,lapply(shaded_chrs,function(x){
     data.frame(chr=x,xmin=tmp[which(tmp$chromosome_name==x),"rank"][1],xmax=rev(tmp[which(tmp$chromosome_name==x),"rank"])[1])
   }))
+  shad_pnt <- rep('gray70',nrow(tmp))
+  shad_pnt[which(tmp$chromosome_name  %in% shaded_chrs2)] <- 'black'
   Y_min <- min(tmp$correl)-0.05
   Y_max <- max(tmp$correl)+0.05
   
   out_plt <- ggplot(tmp, aes(rank, correl, label = label)) +
-    annotate("rect", xmin =shad_block$xmin, xmax = shad_block$xmax, ymin = Y_min, ymax = Y_max,alpha = .2)+
-    geom_point(alpha=0.5) +
+    # annotate("rect", xmin =shad_block$xmin, xmax = shad_block$xmax, ymin = Y_min, ymax = Y_max,alpha = .2)+
+    geom_point(alpha=0.5,color=shad_pnt) +
     theme_classic()+
-    ggrepel::geom_label_repel(aes(label=gene,size = abs(betas_pen)),data=glabels,
-                              box.padding = .3, max.overlaps = Inf, color = "blue2",
-                              seed = 0,min.segment.length = 0,nudge_y = .1,na.rm = TRUE
-    ) +
+    # ggrepel::geom_label_repel(aes(label=gene,size = abs(betas_pen)),data=glabels,
+    #                           box.padding = .3, max.overlaps = Inf, color = "blue2",
+    #                           seed = 0,min.segment.length = 0,nudge_y = .1,na.rm = TRUE
+    # ) +
     theme(plot.margin=margin(0,0,0,0))+
-    scale_size_continuous("Beta magnitude")+
+    # scale_size_continuous("Beta magnitude")+
+    scale_size_continuous(NULL)+
     # annotate("text",x=2000,y=-.3,label=paste0("cor=",round(cor.test(aframe[,nam],aframe$y)$estimate,3),
     #                                         "\npval=",round(cor.test(aframe[,nam],aframe$y)$p.value,5)))+
     scale_x_continuous(labels=shaded_chrs, breaks=rowSums(shad_block[,-1])/2)+
-    labs(title=paste(nam,scorObj,"score"),x="Chromosome/Gene order",y="Correlation")
+    guides(fill="none",color='none',size='none')+
+    theme(axis.text.x = element_text(color=rep(c("black","gray70"),length(shaded_chrs)/2)))+
+    labs(title=paste(nam,scorObj,"score"),x="Chromosome",y="Correlation")
   ggsave(paste0("../Outputs/graphics/",nam,"_",scorObj,"nolab.pdf"),out_plt,width = 12,height = 6)
   ggsave(paste0("../Outputs/graphics/",nam,"_",scorObj,"nolab.JPEG"),out_plt,width = 12,height = 6)
   ### Scatter or boxplots explaining primary peak (EGFR amplification is associated with increased dependency)
@@ -195,10 +203,12 @@ lapply(names(res_cnv),function(nam,scorObj='demeter2',res_cnv=res_cnv){
   gene_interest <- nam
   which_interest <- which(tmp$chromosome_name==tmp$chromosome_name[which(tmp$gene==gene_interest)])
   tmpsub <- tmp[which_interest,]
+  #only display gene of interest
+  glabels_sub<- glabels[which(glabels$gene==nam),]
   out_plt + coord_cartesian(xlim=c(min(which_interest),max(which_interest)),
                             ylim=c(min(tmpsub$correl)-0.05,max(tmpsub$correl)+0.05),
                             expand = F)+
-    ggrepel::geom_label_repel(aes(label=gene,size = abs(betas_pen)),data=glabels,
+    ggrepel::geom_label_repel(aes(label=gene,size = 1),data=glabels_sub,
                               box.padding = .3, max.overlaps = Inf, color = "blue2",
                               seed = 0,min.segment.length = 0,nudge_y = .05,na.rm = TRUE
     ) +
@@ -207,12 +217,13 @@ lapply(names(res_cnv),function(nam,scorObj='demeter2',res_cnv=res_cnv){
   ggsave(paste0("../Outputs/graphics/",nam,"_",scorObj,"_zoom_",gene_interest,".JPEG"),width = 12,height = 6)
   ### Zoom into GAB2 region. Show that many genes have similar statistical evidence but lasso identifies GAB2.
   gene_interest <- 'GAB2'
+  glabels_sub<- glabels[glabels$gene%in%c(gene_interest,nam),]
   which_interest <- which(tmp$gene==gene_interest)
   tmpsub <- tmp[(which_interest-100):(which_interest+100),]
   out_plt + coord_cartesian(xlim=c(which_interest-100,which_interest+100),
                             ylim=c(min(tmpsub$correl)-0.05,max(tmpsub$correl)+0.05),
                             expand = F)+
-    ggrepel::geom_label_repel(aes(label=gene,size = abs(betas_pen)),data=glabels,
+    ggrepel::geom_label_repel(aes(label=gene,size = 1),data=glabels_sub,
                               box.padding = .3, max.overlaps = Inf, color = "blue2",
                               seed = 0,min.segment.length = 0,nudge_y = .05,na.rm = TRUE
     ) +
@@ -221,6 +232,20 @@ lapply(names(res_cnv),function(nam,scorObj='demeter2',res_cnv=res_cnv){
   ggsave(paste0("../Outputs/graphics/",nam,"_",scorObj,"_zoom_",gene_interest,".JPEG"),width = 12,height = 6)
   
   
+  ## Plot Beta_pen and Beta
+  betaP <- ggplot(tmp, aes(rank, betas_pen, label = label)) +
+    geom_point(alpha=0.5,color=shad_pnt) +
+    theme_classic()+
+    ggrepel::geom_label_repel(aes(label=gene),data=glabels,
+                              box.padding = .01, max.overlaps = Inf, color = "blue2",
+                              seed = 0,min.segment.length = .001,nudge_y = .01,na.rm = TRUE
+    ) +
+    theme(plot.margin=margin(0,0,0,0))+
+    scale_size_continuous(NULL)+
+    scale_x_continuous(labels=shaded_chrs, breaks=rowSums(shad_block[,-1])/2)+
+    guides(fill="none",color='none',size='none')+
+    theme(axis.text.x = element_text(color=rep(c("black","gray70"),length(shaded_chrs)/2)))+
+    labs(title=paste(nam,scorObj,"score"),x="Chromosome",y="Correlation")
   if(scatterp){
     aframe$CDK6_norm <- F
     aframe$CDK6_norm[which(aframe$CDK6>=0.8&aframe$CDK6<=1.2)]<-T
