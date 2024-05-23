@@ -1,7 +1,9 @@
 # Load R libs ####
+library(biomaRt)
 library(caret)
 library(data.table)
 library(ggplot2)
+library(ggpubr)
 library(glmnet)
 
 
@@ -27,6 +29,21 @@ X_rna <- X
 # Define CNV table ####
 X_cnv <- cnv
 X_cnv <- na.omit(log2(X_cnv))
+
+
+# Load gene coordinates ####
+mart <- useDataset("hsapiens_gene_ensembl", useMart("ensembl"))
+gene_info <- getBM(
+  attributes = c("chromosome_name", "start_position", "hgnc_symbol"),
+  filters = "hgnc_symbol",
+  values = colnames(cnv),
+  mart = mart)
+chrs <- as.character(1:22)
+gene_info <- gene_info[gene_info$chromosome_name %in% chrs, ]
+uniq <- names(which(table(gene_info$hgnc_symbol) == 1))
+gene_info <- gene_info[gene_info$hgnc_symbol %in% uniq, ]
+gene_info$chromosome_name <- factor(
+  gene_info$chromosome_name, levels = chrs)
 
 
 # Define mutation table ####
@@ -59,47 +76,103 @@ res_chr <- res
 names(res_chr) <- chr_genes
 
 
-
-# ####
+# Assess D2 results ####
 res <- res_d2
 bad <- which(unlist(lapply(res, class)) == "try-error")
 good <- names(res)[-bad]
-d2_combined <- do.call(rbind, lapply(good, function(x)
-  data.frame(target = x, res[[x]])))
+d2_combined <- lapply(good, function(x){
+  if(is.null(res[[x]])) return(NULL)
+  data.frame(target = x, res[[x]])
+})
+d2_combined <- do.call(rbind, d2_combined)
 
 tmp <- d2_combined
 tmp <- tmp[tmp$betas_pen != 0, ]
 
-subm <- tmp[tmp$target == "AURKA" & tmp$omic == "CNV", ]
 
-ggplot(subm, aes(correl, betas_pen)) +
-  geom_point() +
-  labs(
-    x = "Correlation coefficient",
-    y = "Regularized LASSO beta"
-  ) +
-  geom_vline(xintercept = 0, linetype = 2) +
-  geom_hline(yintercept = 0, linetype = 2) +
-  geom_text(aes(label = gene)) +
-  theme_classic()
+plot_manhattan <- function(gene){
+  y <- demeter2[, gene]
+  y <- y[!is.na(y)]
+  
+  correl <- cor(
+    X_cnv[match(names(y), rownames(X_cnv)), ], y,
+    use = "pairwise.complete")[,1]
+  
+  aframe <- data.frame(
+    gene = names(correl),
+    gene_info[match(names(correl), gene_info$hgnc_symbol), ],
+    correl
+  )
+  aframe <- aframe[order(aframe$chromosome_name, aframe$start_position),]
+  aframe$rank <- 1:nrow(aframe)
+  
+  subm <- tmp[tmp$target == gene & tmp$omic == "CNV", ]
+  aframe$betas_pen <- subm$betas_pen[match(aframe$gene, subm$gene)]
+  
+  aframe <- aframe[!is.na(aframe$chromosome_name), ]
+  
+  ggplot(aframe,
+         aes(rank, correl, color = chromosome_name)) +
+    labs(
+      title = gene, 
+      y = "Pearson correlation coefficient",
+      x = "Gene sorted by genomic location"
+    ) +
+    geom_hline(yintercept = 0, linetype = 2, color = "red") +
+    geom_point() +
+    geom_label(
+      data = aframe[!is.na(aframe$betas_pen),], 
+      aes(label = gene), color = "blue") +
+    scale_color_manual(values = rep(c("black", "grey"), 11)) +
+    theme_classic()  
+}
+plot_manhattan(gene = "MCM2")
+plot_manhattan(gene = "RBM39")
+plot_manhattan(gene = "DDX46")
 
-y <- demeter2[, "AURKA"]
-y <- y[!is.na(y)]
 
-aframe <- data.frame(
-  cnv = X_cnv[match(names(y), rownames(X_cnv)), c("AURKA", "TACC2")],
-  mut = X_mut[match(names(y), rownames(X_mut)), c("PASK", "SNX31")],
-  y  
-)
-ggplot(aframe, aes(cnv.AURKA, y)) +
-  geom_point() +
-  stat_cor() +
-  theme_classic()
+plot_gene <- function(gene){
+  subm <- tmp[tmp$target == gene, ]
+  subm <- subm[order(-abs(subm$betas_pen)), ]
+  subm <- subm[1:20, ]
+  
+  subm$gene <- factor(subm$gene, levels = unique(subm$gene))
+  
+  ggplot(subm, aes(betas_pen, gene, fill = omic)) +
+    geom_bar(stat = "identity") +
+    labs(
+      title = gene, 
+      subtitle = "Top 20 multi-omic biomarkers",
+      y = "Biomarker",
+      x = "Regularized LASSO beta"
+    ) +
+    geom_vline(xintercept = 0, linetype = 2) +
+    geom_text(aes(label = gene), size = 3) +
+    theme_classic() 
+}
+plot_gene("AURKA")
+plot_gene("TUBB")
 
 
+gene <- "AURKA"
+subm <- tmp[tmp$target == gene, ]
+n_mut <- rowSums(
+  X_mut[, intersect(subm$gene, colnames(X_mut))])
+
+ok <- intersect(rownames(X_mut), rownames(demeter2))
+boxplot(split(demeter2[ok, gene], n_mut[ok]))
+
+
+# Assess Chronos results ####
 res <- res_chr
 bad <- which(unlist(lapply(res, class)) == "try-error")
 good <- names(res)[-bad]
-d2_combined <- do.call(rbind, lapply(good, function(x)
-  data.frame(target = x, res[[x]])))
+chr_combined <- lapply(good, function(x){
+  if(is.null(res[[x]])) return(NULL)
+  data.frame(target = x, res[[x]])
+})
+chr_combined <- do.call(rbind, chr_combined)
+
+tmp <- chr_combined
+tmp <- tmp[tmp$betas_pen != 0, ]
 
