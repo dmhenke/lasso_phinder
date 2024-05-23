@@ -18,7 +18,7 @@ get_scores <- function(gene, ppi){
 }
 
 ## Calculate best lambda ####
-find_lambda <- function(X, y, plot = T){
+find_lambda <- function(X, y, plot = F){
   fitcv <- cv.glmnet(
     X, y, 
     alpha = 1, 
@@ -29,6 +29,7 @@ find_lambda <- function(X, y, plot = T){
 }
 
 ## Given matrix of correlation between predicted and observed values from
+
 ## cross-validation across range of phi values, find best phi ####
 find_best_phi_rmse <- function(correls, phi_range, plot = T){
   median_rmse <- apply(correls, 1, median)
@@ -42,6 +43,7 @@ find_best_phi_rmse <- function(correls, phi_range, plot = T){
   diff_rmse <- aframe$rmse - preds
   
   best_rmse_phi <- phi_range[which(diff_rmse == min(diff_rmse))]
+
   
   if(plot){
     ggplot(aframe, aes(phi, rmse)) +
@@ -52,6 +54,23 @@ find_best_phi_rmse <- function(correls, phi_range, plot = T){
       geom_point() +
       geom_vline(xintercept = best_rmse_phi) +
       theme_classic()
+    # rmse vs phi
+    ggplot(aframe, aes(phi, cor,color=phi,size=size)) +
+      labs(
+        x = 'Phi',
+        y = 'Correlation'
+      ) +
+      geom_point() +
+      geom_abline(intercept =afit$coefficients[1],slope = afit$coefficients[2] )+
+      theme_classic()+geom_vline(xintercept = best_cor_phi)
+    ggplot(aframe, aes(phi, rmse,color=phi,size=size)) +
+      labs(
+        x = 'Phi',
+        y = 'RMSE'
+      ) +
+      geom_point() +
+      geom_abline(intercept =afit$coefficients[1],slope = afit$coefficients[2] )+
+      theme_classic()+geom_vline(xintercept = best_cor_phi)
   }
   
   return(best_rmse_phi)
@@ -117,6 +136,7 @@ run_reg_lasso <- function(X, y, scores,
     return(NA)
   }
   
+
   best_phi <- find_best_phi_rmse(correls, phi_range, plot = T)
 
   print(paste("Best phi based on RMSE:", round(best_phi, 4)))

@@ -6,328 +6,324 @@ library(glmnet)
 
 
 # Load String data ####
-wrkfldr <- "/mnt/data/user/david/lasso/"
+# ppi <- fread("../Data/9606.protein.links.v12.0.txt")
+# 
+# ppi$protein1 <- gsub("9606.", "", ppi$protein1, fixed = T)
+# ppi$protein2 <- gsub("9606.", "", ppi$protein2, fixed = T)
+# 
+# mart <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+# gene_info <- getBM(
+#   attributes = c("ensembl_peptide_id", "hgnc_symbol","chromosome_name","start"), mart = mart)
+# nam_chr <- c(as.character(c(1:22)),"X","Y","MT")
+# gene_info$chromosome_name <- factor(gene_info$chromosome_name , ordered = TRUE, 
+#        levels = c(nam_chr,sort(unique(gene_info$chromosome_name)[!unique(gene_info$chromosome_name)%in%nam_chr])))
+# save(gene_info,file="../Data/gene_info.RData")
+# 
+# ppi$gene1 <- gene_info$hgnc_symbol[match(ppi$protein1, gene_info$ensembl_peptide_id)]
+# ppi$gene2 <- gene_info$hgnc_symbol[match(ppi$protein2, gene_info$ensembl_peptide_id)]
+# save(ppi,file="../Data/ppi_w_symbols.RData")
 
-ppi <- fread("C:/Users/Dafydd/Documents/Projects/lasso_PPI/9606.protein.links.v12.0.txt")
-ppi <- fread("/mnt/data/user/david/9606.protein.links.v12.0.txt")
+load("../Data/ppi_w_symbols.RData")
+load("../Data/gene_info.RData")
 
-ppi$protein1 <- gsub("9606.", "", ppi$protein1, fixed = T)
-ppi$protein2 <- gsub("9606.", "", ppi$protein2, fixed = T)
+# Load data: expressions & scores ####
+# load("C:/Users/Dafydd/Documents/Projects/lasso_PPI/global.RData")
+load(paste0("../Data/global.RData"))
 
-mart <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
-gene_info <- getBM(
-  attributes = c("ensembl_peptide_id", "hgnc_symbol"), mart = mart)
 
-ppi$gene1 <- gene_info$hgnc_symbol[match(ppi$protein1, gene_info$ensembl_peptide_id)]
-ppi$gene2 <- gene_info$hgnc_symbol[match(ppi$protein2, gene_info$ensembl_peptide_id)]
+# Load functions ####
+source("./allfunctions.R")
+
+
+# Define X and y ####
+# Dependency score source
+# Y
+scor_src <- 'demeter2'
+if(scor_src == 'demeter2'){
+  dep_scor <- demeter2} else if(scor_src == 'kronos'){
+    dep_scor <- kronos}
+# X
+exp_src <- 'cnv'
+if(exp_src=='rnaseq'){
+  ind_exp <- rnaseq
+}else if(exp_src=='cnv'){
+  ind_exp <- na.omit(cnv)
+}
+
+ind_exp <- na.omit(ind_exp)
+
+
+ok_cells <- intersect(
+  rownames(ind_exp),
+  rownames(dep_scor))
+
+X_ind_exp <- ind_exp[ok_cells, ]
+y_dep_scor <- dep_scor[ok_cells,]
+if(exp_src=='rnaseq'){
+  expressed <- apply(X_ind_exp, 2, function(x) mean(x > 0))
+  X_ind_exp <- X_ind_exp[, expressed > 0.95]
+  X_ind_exp <- apply(X_ind_exp, 2, function(x)
+    (x - mean(x))/sd(x))
+}
+
+# test phi, corr vs rmse
+gene_sample <- c("MYC",sample(colnames(dep_scor),100))
+gene_sample2 <- c("KDM5D","SOX10","FAM50A","RPP25L","PAX8","KRTAP4-11",
+                  "EBF1","IRF4","H2BC15","MYB","MDM2","OR4P4"    ,
+                  "KRAS","NRAS","HNF1B","OR4C11","EIF1AX","POU2AF1",  
+                  "TP63","BRAF","TTC7A","OR4S2")
+gene_sample <-gene_sample[gene_sample%in%colnames(dep_scor)]
+gene_sample2 <-gene_sample2[gene_sample2%in%colnames(dep_scor)]
+
+# BRCA1 assocated genes
+gene_sample3 <-c("PALB2","BARD1","BRIP1","RAD50","RAD51C","RAD51D","RAD54L","ATM","ATR","ATRX","FANCONI","FANCA", "FANCB", "FANCC","CHEK1", "CHEK2", "BLM","NBN","MRE11A")
+gene_sample3 <-gene_sample3[gene_sample3%in%colnames(dep_scor)]
+
+gene_sample4 <- c("MYC","SF3B1","BRCA1","BRCA2")
+# gene_sample5<- c("KRAS","TP53","RASGRF2", "NRAS",""
+gene_sample6<- c("EGFR","MYC","ERBB2", "CDK4/6","PIK3CA")
+                                  
+
+
+library("parallel")
+
+phiout <- mclapply(gene_sample4,function(gene){
+  save_results_file <- paste0(gene,'.RData')
+  if(save_results_file%in%list.files(paste0("../Outputs/",scor_src,"/"))){
+    print(paste('alredy processed',gene))
+    NULL
+  }else{
+    print(paste('Processing',gene))
+    y <- na.omit(y_dep_scor[, gene])
+    X <- X_ind_exp[match(names(y),rownames(X_ind_exp)), ]
+    scores <- get_scores(gene, ppi)
+    out <- run_reg_lasso(
+      X, y, scores,
+      n_folds = 10, phi_range = seq(0, 1, length = 30))
+    save(out,file=paste0("../Outputs/",scor_src,"/",gene,'.RData'))
+    return(out)
+  }
+},mc.cores = 10)
+
+
+
+
+# PLOTTING ####
+
+
+tmp <- results_cnv$betas
+tmp$gene <- rownames(tmp)
+tmp$correl <- cor(X_cnv, y)[, 1]
+tmp$rank <- 1:nrow(tmp)
+
+tmp$label <- tmp$gene
+tmp$label[tmp$betas_pen == 0] <- NA
+tmp$label[tmp$gene == "SF3B1"] <- "SF3B1"
+
+
+glabels <- tmp[order(abs(tmp$betas_pen),decreasing = T)[1:20],]
+
+
+ggplot(tmp, aes(rank, correl, label = label)) +
+  geom_point() +
+  # geom_label(aes(size = abs(betas_pen))) +
+  theme_classic()+
+  ggrepel::geom_label_repel(aes(label=gene,size = abs(betas_pen)),data=glabels,
+                            box.padding = .3, max.overlaps = Inf, color = "blue2",
+                            seed = 0,min.segment.length = 0,nudge_y = .1,na.rm = TRUE
+  ) +
+  labs(title="SF3B1",x="Gene order",y="Correlation")
+
+
+
+
+# BELOW HERE IS TEMP ####
+# Load R libs ####
+library(caret)
+library(data.table)
+library(ggplot2)
+library(glmnet)
+
+
+# Source code ####
+source("allfunctions.R")
+
+
+# Load STRING data ####
+load("../Data/ppi_w_symbols.RData")
 
 
 # Load DepMap data ####
-# load("C:/Users/Dafydd/Documents/Projects/lasso_PPI/global.RData")
-load(paste0(wrkfldr,"/global.RData"))
+load("../Data/global.RData")
 
 
-# Define helper functions ####
-get_scores <- function(gene, ppi){
-  tmp <- ppi[(ppi$gene1 %in% c(gene) | 
-                ppi$gene2 %in% c(gene)), ]
-  tmp <- tmp[tmp$gene1 != "" & tmp$gene2 != "", ]
-  scores <- as.numeric(tmp[["combined_score"]][tmp$gene1 == gene])
-  names(scores) <- as.character(tmp[["gene2"]][tmp$gene1 == gene])
-  scores[gene] <- 1000
-  return(scores)
-}
+# Normalize RNA expression data ####
+X <- rnaseq
+expressed <- apply(X, 2, function(x) mean(x > 0))
+X <- X[, expressed > 0.95]
+X <- apply(X, 2, function(x)
+  (x - mean(x))/sd(x))
+X_rna <- X
 
-find_lambda <- function(X, y, plot = T){
-  fitcv <- cv.glmnet(
-    X, y, 
-    alpha = 1, 
-    nfolds = round(nrow(X)/30,0),
-    lambda = NULL)
-  if(plot) plot(fitcv, xvar = "lambda", label = T)
-  # fitcv$lambda.min
-  fitcv$lambda.1se # more conservative vs 'lambda.min'
-}
 
-find_best_phi <- function(correls, phi_range, plot = T){
-  median_correls <- unlist(lapply(split(correls$cor,correls$phi), median))
-  median_rmse <- unlist(lapply(split(correls$rmse,correls$phi), median))
+# Define CNV table ####
+X_cnv <- cnv
+X_cnv <- na.omit(X_cnv)
+
+
+# Define mutation table ####
+tmp <- fread("../Data/Damaging_Mutations.csv")
+mut <- data.matrix(tmp[,-1])
+mut <- apply(mut, 2, function(x)
+  as.numeric(x > 0))
+rownames(mut) <- tmp[[1]]
+X_mut <- mut
+
+
+# Define outcome ####
+gene_sample6<- c("EGFR","MYC","ERBB2", "CDK4","CDK6","PIK3CA")
+
+res_cnv <- lapply(gene_sample6[5],function(gene){
+  y <- demeter2[, gene]
+  # y <- kronos[, gene]
+  y <- y[!is.na(y)]
   
+  tissue <- sample_info[names(y), "lineage"]
+  #y_resid <- residuals(lm(y ~ tissue))
+  #y <- y_resid
+  
+  
+  # Find overlapping cell lines ####
+  ok_cells <- intersect(names(y), rownames(X_rna))
+  ok_cells <- intersect(ok_cells, rownames(X_cnv))
+  ok_cells <- intersect(ok_cells, rownames(X_mut))
+  
+  
+  # Remove features without variance ####
+  X_rna  <- X_rna[ok_cells, ]
+  X_rna <- X_rna[, apply(X_rna, 2, var) > 0]
+  
+  X_mut <- X_mut[ok_cells, ]
+  X_mut <- X_mut[, colSums(X_mut) >= 5]
+  
+  X_cnv  <- X_cnv[ok_cells, ]
+  X_cnv <- X_cnv[, apply(X_cnv, 2, var) > 0]
+  
+  y <- y[ok_cells]
+  
+  
+  # Run LASSO ####
+  scores <- get_scores(gene, ppi)
+  
+  # results_rna <- run_reg_lasso(
+  #   X_rna, y, scores,
+  #   n_folds = 10, phi_range = seq(0, 1, length = 30))
+  
+  results_cnv <- run_reg_lasso(
+    X_cnv, y, scores,
+    n_folds = 10, phi_range = seq(0, 1, length = 30))
+  
+  # results_mut <- run_reg_lasso(
+  #   X_mut, y, scores,
+  #   n_folds = 10, phi_range = seq(0, 1, length = 30))
+  
+  
+  return(results_cnv)
+  
+});names(res_cnv)<-gene_sample6
+
+# plt ####
+lapply(names(res_cnv),function(nam){
+  ## prep objs ####
+  y <- demeter2[, nam]
+  # y <- kronos[, gene]
+  y <- y[!is.na(y)]
+  
+  tissue <- sample_info[names(y), "lineage"]
+  #y_resid <- residuals(lm(y ~ tissue))
+  #y <- y_resid
+  
+  
+  # Find overlapping cell lines ####
+  ok_cells <- intersect(names(y), rownames(X_rna))
+  ok_cells <- intersect(ok_cells, rownames(X_cnv))
+  ok_cells <- intersect(ok_cells, rownames(X_mut))
+  
+  
+  # Remove features without variance ####
+  X_rna  <- X_rna[ok_cells, ]
+  X_rna <- X_rna[, apply(X_rna, 2, var) > 0]
+  
+  X_mut <- X_mut[ok_cells, ]
+  X_mut <- X_mut[, colSums(X_mut) >= 5]
+  
+  X_cnv  <- X_cnv[ok_cells, ]
+  X_cnv <- X_cnv[, apply(X_cnv, 2, var) > 0]
+  
+  y <- y[ok_cells]
+  
+  ## Plot ####
+  
+  results_cnv <- res_cnv[[nam]]
+  tmp <- results_cnv$betas
+  tmp$gene <- rownames(tmp)
+  tmp$correl <- cor(X_cnv, y)[, 1]
+  tmp$rank <- 1:nrow(tmp)
+  
+  tmp$label <- tmp$gene
+  tmp$label[tmp$betas_pen == 0] <- NA
+  tmp$label[tmp$gene == nam] <- nam
+  
+  
+  glabels <- tmp[order(abs(tmp$betas_pen),decreasing = T)[1:20],]
+  # corr
   aframe <- data.frame(
-    phi = phi_range, 
-    cor = median_correls,
-    rmse = median_rmse)
+    X_cnv[, c(nam, "KRAS", "NRAS","ALK")],
+    y
+  )
   
-  # afit <- lm(cor ~ phi, data = aframe[c(1, nrow(aframe)), ])
-  afit <- lm(cor ~ phi, data = aframe[c(1, nrow(aframe)), ])
-  preds <- predict(afit, aframe)
-  diff_corr <- aframe$cor - preds
-  afit2 <- lm(rmse ~ phi, data = aframe[c(1, nrow(aframe)), ])
-  preds2 <- predict(afit2, aframe)
-  diff_rmse <- aframe$rmse - preds2
-  
-  best_cor_phi <- phi_range[which(diff_corr == max(diff_corr))]
-  best_rmse_phi <- phi_range[which(diff_rmse == min(diff_rmse))]
-  
-  if(plot){
-    # ggplot(aframe, aes(phi, cor)) +
-    #   labs(
-    #     x = 'phi',
-    #     y = 'Correlation'
-    #   ) +
-    #   geom_vline(xintercept = best_phi, linetype = "dashed") +
-    #   geom_point() +
-    #   theme_classic()
-    aframe$size=1;aframe$size[aframe$phi%in% c(best_cor_phi,best_rmse_phi)]<-2
-    ggplot(aframe, aes(rmse, cor,color=phi,size=size)) +
-      labs(
-        x = 'RSME',
-        y = 'Correlation'
-      ) +
-      geom_point() +
-      geom_abline(intercept =afit$coefficients[1],slope = afit$coefficients[2] )+
-      theme_classic()
-    diffame <-data.frame(diff_corr,diff_rmse,phi=phi_range,size=1)
-    diffame$size=1;diffame$size[diffame$phi%in% c(best_cor_phi,best_rmse_phi)]<-2
-    ggplot(diffame, aes(diff_rmse, diff_corr,color=phi,size=size)) +
-      labs(
-        x = 'diff RSME',
-        y = 'diff Correlation'
-      ) +
-      geom_point() +
-      geom_abline(intercept =afit$coefficients[1],slope = afit$coefficients[2] )+
-      theme_classic()
+  out_plt <- ggplot(tmp, aes(rank, correl, label = label)) +
+    geom_point() +
+    # geom_label(aes(size = abs(betas_pen))) +
+    theme_classic()+
+    ggrepel::geom_label_repel(aes(label=gene,size = abs(betas_pen)),data=glabels,
+                              box.padding = .3, max.overlaps = Inf, color = "blue2",
+                              seed = 0,min.segment.length = 0,nudge_y = .1,na.rm = TRUE
+    ) +
+    annotate("text",x=2000,y=-.3,label=paste0("cor=",round(cor.test(aframe[,nam],aframe$y)$estimate,3),
+                                              "\npval=",round(cor.test(aframe[,nam],aframe$y)$p.value,5)))+
+    labs(title=nam,x="Gene order",y="Correlation")
+  if(scatterp){
+    aframe$CDK6_norm <- F
+    aframe$CDK6_norm[which(aframe$CDK6>=0.8&aframe$CDK6<=1.2)]<-T
+    ggplot(aframe,aes(y=y,x=aframe[,"ALK"],color=CDK6_norm))+
+      theme_classic()+      geom_hline(yintercept =0)+
+      geom_vline(xintercept =1)+geom_point()+
+      geom_smooth(method="lm",se=F)+
+      # scale_x_continuous(breaks = c(.25,.5,1,2,3,4),labels =c("1/4",'1/2','1','2','3','4'),trans="log2")+
+      labs(title="ALK CNV vs CDK6 dependency",x=paste("ALK (CNV)"),y=paste("CDK6 (Dependency)"))
+    
+    # plot only normal 
+    aframe2 <- aframe[which(aframe$CDK6_norm),]
+    ggplot(aframe2,aes(y=y,x=aframe2[,"ALK"],color=CDK6_norm))+
+      theme_classic()+      
+      geom_hline(yintercept =0)+
+      geom_vline(xintercept =1)+geom_point()+
+      geom_smooth(method="lm",se=F)+
+      annotate("text",x=3,y=.2,label=paste0("cor=",round(cor.test(aframe2[,"ALK"],aframe2$y)$estimate,3),
+                                            "\npval=",round(cor.test(aframe2[,"ALK"],aframe2$y)$p.value,5)))+
+      labs(title="ALK CNV vs CDK6 dependency\npopulation=CDK6 CNV [0.8-1.2]",x=paste("ALK (CNV)"),y=paste("CDK6 (Dependency)"))
+    
+    
+    ggplot(aframe, aes(interaction(ALK > 1.2, CDK6 > 1.2), y)) + geom_boxplot()
+    aframe$ALK_norm<-F; aframe$ALK_norm[which(aframe$ALK>=0.8&aframe$ALK<=1.2)]<-T
+    ggplot(aframe,aes(x=y,color=ALK_norm,fill=CDK6_norm,group=paste(ALK_norm,CDK6_norm)))+geom_histogram(position = 'identity',alpha=0.5)+
+      geom_vline(aes(xintercept=mean(y)))+
+      theme_classic()+
+      facet_grid(paste(CDK6_norm,ALK_norm)~.)
+    
   }
-  
-  return(data.frame(best_cor_phi,best_rmse_phi))
-}
 
-run_reg_lasso <- function(X, y, scores,
-                          n_folds = 10,
-                          phi_range = seq(0, 1, length = 30)){
-  lambda_min <- find_lambda(X, y, plot = F)
-  
-  # print(paste("Lambda min:", lambda_min))
-  print(paste("Lambda 1st SE:", round(lambda_min,4)))
-  
-  afit <- glmnet(
-    X, y, 
-    alpha = 1, 
-    lambda = lambda_min)
-  betas <- afit$beta[,1]
-  
-  penalties <- scores[match(colnames(X), names(scores))]
-  names(penalties) <- colnames(X)
-  penalties[is.na(penalties)] <- 0
-  penalties <- penalties/1000
-  
-  asplits <- suppressWarnings(split(sample(1:nrow(X)), 1:n_folds))
-  
-  correls <- do.call(rbind, lapply(names(asplits), function(x){
-    train <- unlist(asplits[setdiff(names(asplits), x)])
-    test <- unlist(asplits[x])
-    
-    do.call(rbind,lapply(phi_range, function(phi){
-      lasso_tr <- glmnet(
-        X[train,],
-        y[train],
-        lambda = lambda_min,
-        penalty.factor = 1 - penalties * phi)
-      
-      pred <- predict(lasso_tr,X[test,])
-      rmse <- sqrt(apply((y[test]-pred)^2,2,mean))
-      corout <- try(cor(pred, y[test]),silent = T)
-      data.frame(cor=cor(pred, y[test]) ,rmse=rmse,run=x,phi=phi)
-    }))
-  }))
-  
-  best_phi <- find_best_phi(correls, phi_range)$best_cor_phi
-  
-  
-  afit <- glmnet(
-    X,
-    y,
-    alpha = 1,
-    lambda = lambda_min,
-    penalty.factor = 1 - penalties * best_phi)
-  betas_pen <- afit$beta[,1]
-  
-  best_phi <- find_best_phi(correls, phi_range, plot = F)$best_cor_phi
-  
-  print(paste("Phi best:", round(best_phi,4)))
-  
-  afit <- glmnet(
-    X,
-    y,
-    alpha = 1,
-    lambda = lambda_min,
-    penalty.factor = 1 - penalties * best_phi)
-  betas_pen <- afit$beta[,1]
-  
-  return(data.frame(
-    betas, 
-    betas_pen))
-}
-
-run_reg_lasso_phionly <- function(X, y, scores,
-                                  n_folds = 10,
-                                  phi_range = seq(0, 1, length = 30)){
-  lambda_min <- find_lambda(X, y, plot = F)
-  
-  # print(paste("Lambda min:", lambda_min))
-  print(paste("Lambda 1st SE:", round(lambda_min,4)))
-  
-  afit <- glmnet(
-    X, y, 
-    alpha = 1, 
-    lambda = lambda_min)
-  betas <- afit$beta[,1]
-  
-  penalties <- scores[match(colnames(X), names(scores))]
-  names(penalties) <- colnames(X)
-  penalties[is.na(penalties)] <- 0
-  penalties <- penalties/1000
-  
-  asplits <- suppressWarnings(split(sample(1:nrow(X)), 1:n_folds))
-  
-  correls <- do.call(rbind, lapply(names(asplits), function(x){
-    train <- unlist(asplits[setdiff(names(asplits), x)])
-    test <- unlist(asplits[x])
-    
-    do.call(rbind,lapply(phi_range, function(phi){
-      lasso_tr <- glmnet(
-        X[train,],
-        y[train],
-        lambda = lambda_min,
-        penalty.factor = 1 - penalties * phi)
-      
-      pred <- predict(lasso_tr,X[test,])
-      rmse <- sqrt(apply((y[test]-pred)^2,2,mean))
-      if(var(pred) == 0) cor_out <- NA else cor_out <- cor(pred, y[test])
-      data.frame(cor= cor_out,rmse=rmse,run=x,phi=phi)
-    }))
-  }))
-  if(any(is.na(correls))) data.frame(best_cor_phi=NA,best_rmse_phi=NA) else find_best_phi(correls, phi_range,plot=F)
-}
-wrap_regLassoPhionly <- function(gene){
-  library(biomaRt)
-  library(data.table)
-  library(ggplot2)
-  library(glmnet)
-  
-  get_scores <- function(gene, ppi){
-    tmp <- ppi[(ppi$gene1 %in% c(gene) | 
-                  ppi$gene2 %in% c(gene)), ]
-    tmp <- tmp[tmp$gene1 != "" & tmp$gene2 != "", ]
-    scores <- as.numeric(tmp[["combined_score"]][tmp$gene1 == gene])
-    names(scores) <- as.character(tmp[["gene2"]][tmp$gene1 == gene])
-    scores[gene] <- 1000
-    return(scores)
-  }
-  
-  find_lambda <- function(X, y, plot = T){
-    fitcv <- cv.glmnet(
-      X, y, 
-      alpha = 1, 
-      nfolds = round(nrow(X)/30,0),
-      lambda = NULL)
-    if(plot) plot(fitcv, xvar = "lambda", label = T)
-    # fitcv$lambda.min
-    fitcv$lambda.1se # more conservative vs 'lambda.min'
-  }
-  
-  find_best_phi <- function(correls, phi_range, plot = T){
-    median_correls <- unlist(lapply(split(correls$cor,correls$phi),median))
-    median_rmse <- unlist(lapply(split(correls$rmse,correls$phi),median))
-    
-    aframe <- data.frame(
-      phi = phi_range, 
-      cor = median_correls,
-      rmse = median_rmse)
-    
-    # afit <- lm(cor ~ phi, data = aframe[c(1, nrow(aframe)), ])
-    afit <- lm(cor ~ phi, data = aframe[c(1, nrow(aframe)), ])
-    preds <- predict(afit, aframe)
-    diff_corr <- aframe$cor - preds
-    afit2 <- lm(rmse ~ phi, data = aframe[c(1, nrow(aframe)), ])
-    preds2 <- predict(afit2, aframe)
-    diff_rmse <- aframe$rmse - preds2
-    
-    best_cor_phi <- phi_range[which(diff_corr == max(diff_corr))]
-    best_rmse_phi <- phi_range[which(diff_rmse == min(diff_rmse))]
-    
-    if(plot){
-      # ggplot(aframe, aes(phi, cor)) +
-      #   labs(
-      #     x = 'phi',
-      #     y = 'Correlation'
-      #   ) +
-      #   geom_vline(xintercept = best_phi, linetype = "dashed") +
-      #   geom_point() +
-      #   theme_classic()
-      aframe$size=1;aframe$size[aframe$phi%in% c(best_cor_phi,best_rmse_phi)]<-2
-      ggplot(aframe, aes(rmse, cor,color=phi,size=size)) +
-        labs(
-          x = 'RSME',
-          y = 'Correlation'
-        ) +
-        geom_point() +
-        geom_abline(intercept =afit$coefficients[1],slope = afit$coefficients[2] )+
-        theme_classic()
-      diffame <-data.frame(diff_corr,diff_rmse,phi=phi_range,size=1)
-      diffame$size=1;diffame$size[diffame$phi%in% c(best_cor_phi,best_rmse_phi)]<-2
-      ggplot(diffame, aes(diff_rmse, diff_corr,color=phi,size=size)) +
-        labs(
-          x = 'diff RSME',
-          y = 'diff Correlation'
-        ) +
-        geom_point() +
-        geom_abline(intercept =afit$coefficients[1],slope = afit$coefficients[2] )+
-        theme_classic()
-    }
-    
-    return(data.frame(best_cor_phi,best_rmse_phi))
-  }
-  run_reg_lasso_phionly <- function(X, y, scores,
-                                    n_folds = 10,
-                                    phi_range = seq(0, 1, length = 30)){
-    lambda_min <- find_lambda(X, y, plot = F)
-    
-    # print(paste("Lambda min:", lambda_min))
-    print(paste("Lambda 1st SE:", round(lambda_min,4)))
-    
-    afit <- glmnet(
-      X, y, 
-      alpha = 1, 
-      lambda = lambda_min)
-    betas <- afit$beta[,1]
-    
-    penalties <- scores[match(colnames(X), names(scores))]
-    names(penalties) <- colnames(X)
-    penalties[is.na(penalties)] <- 0
-    penalties <- penalties/1000
-    
-    asplits <- suppressWarnings(split(sample(1:nrow(X)), 1:n_folds))
-    
-    correls <- do.call(rbind, lapply(names(asplits), function(x){
-      train <- unlist(asplits[setdiff(names(asplits), x)])
-      test <- unlist(asplits[x])
-      
-      do.call(rbind,lapply(phi_range, function(phi){
-        lasso_tr <- glmnet(
-          X[train,],
-          y[train],
-          lambda = lambda_min,
-          penalty.factor = 1 - penalties * phi)
-        
-        pred <- predict(lasso_tr,X[test,])
-        rmse <- sqrt(apply((y[test]-pred)^2,2,mean))
-        if(var(pred) == 0) cor_out <- NA else cor_out <- cor(pred, y[test])
-        data.frame(cor= cor_out,rmse=rmse,run=x,phi=phi)
-      }))
-    }))
-    if(any(is.na(correls))) data.frame(best_cor_phi=NA,best_rmse_phi=NA) else find_best_phi(correls, phi_range,plot=F)
-  }
   y <- y[, gene]
   scores <- get_scores(gene, ppi)
   out <- run_reg_lasso_phionly(
@@ -388,9 +384,4 @@ do.call(rbind,phiout)
 # # betas ##
 # write.csv(data.frame(betas, betas_pen),file=paste0(wrkfldr,gene,'_beta.csv'))
 # 
-
-
-
-
-
 
