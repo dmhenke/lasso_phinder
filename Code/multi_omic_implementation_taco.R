@@ -7,7 +7,7 @@ library(parallel)
 
 
 # Set working directory on taco ####
-setwd("/storage/thinc/git_repos/lasso_phinder/Code")
+if(Sys.info()[[1]]=="Dafydd"){ setwd('../Code/')}else setwd("/storage/thinc/git_repos/lasso_phinder/Code")
 
 
 # Source code ####
@@ -174,22 +174,17 @@ run_analysis <- function(y, gene){
   return(aframe)
 }
 
-res <- mclapply(mc.cores = 32, d2_genes, function(x){
+
+test_genes <- sample(colnames(X_mut),3)
+
+resl <- lapply(test_genes, function(x,whichY=c("demeter2","kronos")[1]){
   print(paste("Working on", x))
-  y <- demeter2[, x]
+  if(whichY=="demeter2")y <- demeter2[, x] else y <- kronos[, x]
   y <- y[!is.na(y)]
-  run_analysis(y, x)
+  res <- run_analysis(y, x)
+  
+  #write results
+  save(res, file = paste0("../Outputs/",whichY,"_",x,"_results_multiomic.RData"))
+  return(res)
 })
-
-save(res, file = "../Outputs/d2_results_multiomic.RData")
-
-
-# Run for list of genes on Chronos ####
-res <- mclapply(mc.cores = 32, chr_genes, function(x){
-  print(paste("Working on", x))
-  y <- kronos[, x]
-  run_analysis(y, x)
-})
-
-save(res, file = "../Outputs/chr_results_multiomic.RData")
 
