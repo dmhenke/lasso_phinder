@@ -7,7 +7,7 @@ library(parallel)
 
 
 # Set working directory on taco ####
-if(Sys.info()[[1]]=="Dafydd"){ setwd('../Code/')}else setwd("/storage/thinc/git_repos/lasso_phinder/Code")
+if(Sys.info()[[6]]=="Dafydd"){ setwd('../Code/')}else setwd("/storage/thinc/git_repos/lasso_phinder/Code")
 
 
 # Source code ####
@@ -175,6 +175,7 @@ run_analysis <- function(y, gene){
 }
 
 
+<<<<<<< HEAD
 test_genes <- sample(colnames(X_mut),3)
 
 resl <- mclapply(mc.cores = 32, d2_genes, function(x,whichY=c("demeter2","kronos")[1]){
@@ -188,5 +189,31 @@ resl <- mclapply(mc.cores = 32, d2_genes, function(x,whichY=c("demeter2","kronos
     save(res, file = paste0("../Outputs/",whichY,"_",x,"_results_multiomic.RData"))
   }  
   return(res)
+=======
+# resl <- mclapply(mc.cores=32,c("demeter2","kronos"),function(scr){
+resl <- lapply(c("demeter2","kronos"),function(scr){
+  if(scr=='kronos'){
+    genes_test <- scan(
+      "../Data/skewed_chr_genes.txt",
+      what = character(), sep = "\n")[1:2]
+  }else if(scr=='demeter2'){
+    genes_test <- scan(
+      "../Data/skewed_d2_genes.txt",
+      what = character(), sep = "\n")[1:2]
+  }
+  # loop
+  lapply(genes_test, function(x,whichY=scr){
+    print(paste("Working on", x))
+    if(whichY=="demeter2")y <- demeter2[, x] else y <- kronos[, x]
+    y <- y[!is.na(y)]
+    # check if analysis already run
+    output_file <- paste0("../Outputs/",whichY,"_",x,"_results_multiomic.RData")
+    if(!basename(output_file) %in% list.files("../Outputs/")){
+      res <- run_analysis(y, x)
+      #write results
+      save(res, file = output_file)
+    }
+    
+  })
+>>>>>>> f8bdd46913d70fc15740366dd15eff30547eae04
 })
-
