@@ -177,14 +177,16 @@ run_analysis <- function(y, gene){
 
 test_genes <- sample(colnames(X_mut),3)
 
-resl <- lapply(test_genes, function(x,whichY=c("demeter2","kronos")[1]){
+resl <- mclapply(mc.cores = 32, d2_genes, function(x,whichY=c("demeter2","kronos")[1]){
   print(paste("Working on", x))
   if(whichY=="demeter2")y <- demeter2[, x] else y <- kronos[, x]
   y <- y[!is.na(y)]
-  res <- run_analysis(y, x)
+  res <- try(run_analysis(y, x))
   
   #write results
-  save(res, file = paste0("../Outputs/",whichY,"_",x,"_results_multiomic.RData"))
+  if(class(res) != "try-error"){
+    save(res, file = paste0("../Outputs/",whichY,"_",x,"_results_multiomic.RData"))
+  }  
   return(res)
 })
 
