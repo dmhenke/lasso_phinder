@@ -223,11 +223,8 @@ run_analysis <- function(y, gene){
   
   X_combined <- do.call(cbind, betas)
   
-  genes <- unlist(lapply(betas, function(x)
-    colnames(x)))
-  omic <- unlist(lapply(names(betas), function(x){
-    rep(x, ncol(betas[[x]])) 
-  }))
+  genes <- unlist(lapply(betas, function(x) colnames(x)))
+  omic <- unlist(lapply(names(betas), function(x){rep(x, ncol(betas[[x]])) }))
   
   
   # Run LASSO again ####
