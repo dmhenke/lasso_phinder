@@ -57,7 +57,7 @@ plot_manhattan <- function(gene){
     theme_classic()  
   ggsave(filename = paste0("../Outputs/graphics/Manhattan_",gene,"_demeter2.png"),plot = gHattan,width = 6,height = 4)
   ggsave(filename = paste0("../Outputs/graphics/Manhattan_",gene,"_demeter2.pdf"),plot = gHattan,width = 6,height = 4)
-  
+  plot(gHattan)
 }
 plot_manhattan2 <- function(gene,resin=res){
   y <- demeter2[, gene]
@@ -122,7 +122,8 @@ plot_manhattan2 <- function(gene,resin=res){
     labs(x=paste0("Chromosome ",which_chrome))
   ggsave(filename = paste0("../Outputs/graphics/Manhattan_",gene,"_chr",which_chrome,"_demeter2.png"),plot = g_chrGene,width = 4,height = 4)
   ggsave(filename = paste0("../Outputs/graphics/Manhattan_",gene,"_chr",which_chrome,"_demeter2.pdf"),plot = g_chrGene,width = 4,height = 4)
-  
+  plot(g_fullLab)
+  plot(g_chrGenev)
 }
 plot_gene <- function(gene){
   subm <- tmp#[tmp$target == gene, ]
@@ -143,41 +144,58 @@ plot_gene <- function(gene){
     geom_text(aes(label = gene), size = 3) +
     theme_classic() 
 }
-plot_Xcompare <- function(gene,gene2="GAB2",score_nam="demeter2",X_cnv=cnv){
+plot_Xcompare <- function(gene,gene2="GAB2",score_nam="demeter2",X_=cnv,omic=c("CNV","RNA","MUT")[1]){
   if(score_nam=="demeter2") score <- demeter2 else score=kronos
   y <- score[,gene]
-  x <- X_cnv[match(names(y),rownames(X_cnv)),]
-  # norm_gene <- x[,gene]>0.8&x[,gene]<1.2
-  # norm_gene1 <- x[,gene2]>0.8&x[,gene2]<1.2
-  # 
-  # norm_gene <- x[,gene]<=0.8
-  # norm_gene1 <- x[,gene2]<=0.8
+  x <- X_[match(names(y),rownames(X_)),]
   
-  # norm_gene <- x[,gene]>=1.2
-  # norm_gene1 <- x[,gene2]>=1.2
-  # 
-  # df <- as.data.frame(rbind(cbind(d2=y,log1=norm_gene,Gene=gene),cbind(d2=y,log1=norm_gene1,Gene=gene2)))
-  # df$d2 <-as.numeric(df$d2)
-  # df <-df[!is.na(df$log1),]
-  # ggplot(df,aes(y=d2,x=paste(Gene,log1)))+geom_boxplot()+
-  #   facet_wrap(~Gene)+
-  #   ggpubr::stat_compare_means()
-  
-  df <- data.frame(d2=y,log1=x[,gene],log2=x[,gene2]);colnames(df) <- c("d2",gene,gene2)
+  if(omic=="CNV"){
+    omic_cutoff<- 1.2
+  } else if(omic=="MUT"){
+    omic_cutoff<- 1
+  } 
+
+  df <- data.frame(d2=y,log1=x[,gene],log2=x[,gene2]);#colnames(df) <- c("d2",gene,gene2)
   df$d2 <-as.numeric(df$d2)
   df <-df[complete.cases(df),]
-  gbox <- ggplot(df,aes(y=d2,x=interaction(EGFR>=1.2,GAB2>=1.2)))+
+  
+  breaks <- c('Normal', paste0(gene," only\ngain"), paste0(gene2," only\ngain"), paste0(gene," & ",gene2,"\ngain"))
+  breaksVal <- c("FALSE.FALSE","TRUE.FALSE","FALSE.TRUE","TRUE.TRUE")
+  names(breaksVal) <- breaks
+  breaksVal<-breaksVal[breaksVal%in% unique(interaction(df$log1>=omic_cutoff,df$log2>=omic_cutoff))]
+  gbox <-  ggplot(df,aes(y=d2,x=interaction(log1>=omic_cutoff,log2>=omic_cutoff),color=interaction(log1>=omic_cutoff,log2>=omic_cutoff)))+
     geom_jitter(width = .1,size=.5)+
     geom_boxplot(alpha=0.5,outlier.shape = NA)+
     ggpubr::stat_compare_means(comparisons =list(c(1,2),c(1,3),c(2,4)))+
-    scale_x_discrete(labels=c('Normal', paste0(gene," only\ngain"), paste0(gene2," only\ngain"), paste0(gene," & ",gene2,"\ngain")))+
-    labs(y=paste0(score_nam,' dependancy: ',gene),x="CNV")+
+    # scale_x_discrete(labels=c('Normal', paste0(gene," only\ngain"), paste0(gene2," only\ngain"), paste0(gene," & ",gene2,"\ngain")))+
+    labs(y=paste0(score_nam,' dependancy: ',gene),x=omic)+
+    scale_color_manual(guide='none',values=c("black","blue","darkred","purple3"),
+                       breaks=breaksVal)+
+                       # labels=c('Normal', paste0(gene," only\ngain"), paste0(gene2," only\ngain"), paste0(gene," & ",gene2,"\ngain")))+
     theme_classic()
   
-  ggsave(filename = paste0("../Outputs/graphics/boxplot_",gene,"_",gene2,".png"),plot = gbox,width = 4,height = 4)
-  ggsave(filename = paste0("../Outputs/graphics/boxplot_",gene,"_",gene2,".pdf"),plot = gbox,width = 4,height = 4)
-  
-  }
+  ggsave(filename = paste0("../Outputs/graphics/boxplot_",gene,"_",gene2,"_",omic,".png"),plot = gbox,width = 4,height = 4)
+  ggsave(filename = paste0("../Outputs/graphics/boxplot_",gene,"_",gene2,"_",omic,".pdf"),plot = gbox,width = 4,height = 4)
+  plot(gbox)
+}
+plot_betas_multi <- function(res_path="../Outputs/demeter2_PRMT5_results_multiomic.RData"){
+  res_info <- strsplit(basename(res_path),'_')[[1]]
+  load(res_path)
+  plt_betas <-  ggplot(res,aes(x=betas,y=betas_pen,color=omic))+
+    geom_hline(yintercept = 0, linetype = 2)+geom_vline(xintercept = 0, linetype = 2)+
+    geom_point()+
+    ggrepel::geom_label_repel(#point.padding = .5,
+                              # min.segment.length = 0,
+                              force=1,direction='both',max.overlaps=100,
+                              max.time = .3, max.iter = 1e5,#box.padding = 0,
+                              data = res[which(abs(res$betas)>=quantile(abs(res$betas),.9) | abs(res$betas_pen)>=quantile(abs(res$betas_pen),.9)),],
+                              aes(label = gene, color = omic),size=2) +
+    labs(x="LASSO",y="Regularized LASSO",title = paste0(res_info[2]," (",res_info[1],") ~ RNA+CNV+Mutation"))+
+    theme_classic()
+    ggsave(file= paste0("../Outputs/graphics/BetaScatter_",res_info[2],"_",res_info[1],".png"),plt_betas,height = 8,width = 8)
+    ggsave(file= paste0("../Outputs/graphics/BetaScatter_",res_info[2],"_",res_info[1],".pdf"),plt_betas,height = 8,width = 8)
+    plot(plt_betas)
+}
 # EGFR/GAB2 betas
 
 # Normalize RNA expression data ####
@@ -189,8 +207,8 @@ X_rna <- X
 
 # Define CNV table ####
 X_cnv <- cnv
-offsetlog2 <- max(log2(cnv[which(cnv>2)]))+0.2
-X_cnv[which(cnv<2)] <- cnv[which(cnv<2)] +2^(-offsetlog2)*(2-cnv[which(cnv<2)] )
+# offsetlog2 <- max(log2(cnv[which(cnv>2)]))+0.2
+# X_cnv[which(cnv<2)] <- cnv[which(cnv<2)] +2^(-offsetlog2)*(2-cnv[which(cnv<2)] )
 X_cnv <- na.omit(log2(X_cnv))
 
 
@@ -243,7 +261,7 @@ names(res_chr) <- chr_genes
 # Assess D2 results ####
 res <- res_d2
 bad <- which(unlist(lapply(res, class)) == "try-error")
-good <- names(res)[-bad]
+if(length(bad)==0){good <- names(res)}else good <- names(res)[-bad]
 d2_combined <- lapply(good, function(x){
   if(is.null(res[[x]])) return(NULL)
   data.frame(target = x, res[[x]])
@@ -253,9 +271,19 @@ d2_combined <- do.call(rbind, d2_combined)
 tmp <- d2_combined
 tmp <- tmp[tmp$betas_pen != 0, ]
 
-
-
 plot_manhattan(gene = "EGFR")
+
+# Multiomic: PRMT5 ####
+load("../Outputs/demeter2_PRMT5_results_multiomic.RData") # res
+tmp <- res#[which(res$betas_pen!=0),]
+plot_manhattan(gene = "PRMT5")
+plot_betas_multi(res_path="../Outputs/demeter2_PRMT5_results_multiomic.RData")
+plot_Xcompare(gene="PRMT5",gene2="MTAP",score_nam="demeter2",X_=cnv,omic="CNV")
+plot_Xcompare(gene="PRMT5",gene2="MTAP",score_nam="demeter2",X_=mut,omic="MUT")
+# plot_Xcompare(gene="PRMT5",gene2="MTAP",score_nam="demeter2",X=rnaseq,omic='RNA')
+
+
+
 
 plot_manhattan(gene = "MCM2")
 plot_manhattan(gene = "RBM39")
