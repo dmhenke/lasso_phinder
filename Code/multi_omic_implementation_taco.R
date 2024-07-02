@@ -40,8 +40,8 @@ X_rna <- X
 
 # Define CNV table ####
 X_cnv <- cnv
-offsetlog2 <- max(log2(cnv[which(cnv>2)]))+0.2
-X_cnv[which(cnv<2)] <- cnv[which(cnv<2)] +2^(-offsetlog2)*(2-cnv[which(cnv<2)] )
+# offsetlog2 <- max(log2(cnv[which(cnv>2)]))+0.2
+# X_cnv[which(cnv<2)] <- cnv[which(cnv<2)] +2^(-offsetlog2)*(2-cnv[which(cnv<2)] )
 X_cnv <- na.omit(log2(X_cnv))
 
 
@@ -84,8 +84,9 @@ resl <- lapply(c("demeter2","kronos"),function(scr){
 
 #single omic
 # EGFR & D2 for CNV
-res_sing <- lapply(c("demeter2","kronos")[1],function(scr,which_omic="CNV"){
-  genes_test <-"EGFR"
+# res_sing <- lapply(c("demeter2","kronos")[1],function(scr,which_omic="CNV3"){
+  res_sing <- lapply(c("demeter2"),function(scr,which_omic="CNVskew2"){
+    genes_test <-"EGFR"
   #loop
   lapply(genes_test, function(x,whichY=scr){
     print(paste("Working on", x))
