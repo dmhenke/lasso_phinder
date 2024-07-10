@@ -228,7 +228,7 @@ run_analysis <- function(y, gene){
   
   
   # Run LASSO again ####
-  X <- X_combined
+  X <- scale(X_combined)
   
   lambda_min <- find_lambda(X, y, plot = F)
   
