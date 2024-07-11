@@ -282,6 +282,47 @@ plot_Xcompare(gene="PRMT5",gene2="MTAP",score_nam="demeter2",X_=cnv,omic="CNV")
 plot_Xcompare(gene="PRMT5",gene2="MTAP",score_nam="demeter2",X_=mut,omic="MUT")
 # plot_Xcompare(gene="PRMT5",gene2="MTAP",score_nam="demeter2",X=rnaseq,omic='RNA')
 
+# 1) prmt5 boxplot of cnv and d2
+#    mtap ...
+# 2) scallter copynumber nutral lines (prmt5 & mtap), rna vs d2
+# box and scatter plots
+lapply(c("PRMT5","MTAP"),function(x){
+
+  dfin <- data.frame(cnv=cnv[intersect(rownames(cnv),rownames(demeter2)),x],d2=demeter2[intersect(rownames(cnv),rownames(demeter2)),"PRMT5"])
+  scat <- ggplot(dfin,aes(x=cnv,y=d2))+geom_point(alpha=0.8)+theme_classic()+
+    labs(         x=paste0("CNV (",x,")"),y="Demeter2: PRMT5")
+  boxUP <- ggplot(dfin,aes(x=cnv>=1.2,y=d2))+geom_boxplot(alpha=0.8)+theme_classic()+
+    ggpubr::stat_compare_means(comparisons =list(c(1,2)))+
+    labs(#title=paste0("CNV: ",x," vs Demeter2: PRMT5"),
+      x=paste0("CNV (",x,") >=1.2"),y="Demeter2: PRMT5")
+  boxDOWN <- ggplot(dfin,aes(x=cnv>0.8,y=d2))+geom_boxplot(alpha=0.8)+theme_classic()+
+    ggpubr::stat_compare_means(comparisons =list(c(1,2)))+
+    labs(      x=paste0("CNV (",x,") >0.8"),y="Demeter2: PRMT5")
+  dfin$updwn <- "<=0.8"
+  dfin$updwn[ which(dfin$cnv>0.8)]<-  "(0.8-1.2)"
+  dfin$updwn[ which(dfin$cnv>=1.2)]<- "1.2"
+  dfin$updwn <- factor(dfin$updwn,ordered=T,levels=c("<=0.8","(0.8-1.2)","1.2"))
+  boxTRIO <- ggplot(dfin,aes(x=updwn,y=d2))+geom_boxplot(alpha=0.8)+theme_classic()+
+    ggpubr::stat_compare_means(comparisons =list(c(1,2),c(2,3)))+
+    labs(      x=paste0("CNV (",x,")"),y="Demeter2: PRMT5")
+  
+  #write graphics
+  ggsave(filename = paste0("../Outputs/graphics/BoxP_multiomic_up_",x,"_cnvD2PRMT5.png"),plot = boxUP,width = 4,height = 4)
+  ggsave(filename = paste0("../Outputs/graphics/BoxP_multiomic_down_",x,"_cnvD2PRMT5.png"),plot = boxDOWN,width = 4,height = 4)
+  ggsave(filename = paste0("../Outputs/graphics/BoxP_multiomic_3_",x,"_cnvD2PRMT5.png"),plot = boxTRIO,width = 4,height = 4)
+  ggsave(filename = paste0("../Outputs/graphics/scatter_multiomic_",x,"_cnvD2PRMT5.png"),plot = scat,width = 4,height = 4)
+  
+  # RNA
+  df2 <- data.frame(rna=rnaseq[intersect(rownames(rnaseq),rownames(demeter2)),x],d2=demeter2[intersect(rownames(rnaseq),rownames(demeter2)),"PRMT5"])
+  # subset to CNV 'neutral"
+  df2<- df2[rownames(dfin)[which(dfin$cnv>=0.8 & dfin$cnv<=1.2)],]
+  scatR <- ggplot(df2,aes(x=rna,y=d2))+geom_point(alpha=0.8)+theme_classic()+
+    labs(title=paste0(x," CNV neutral  lines\nRNA vs Demeter2: PRMT5"),
+      x=paste0("RNAseq (",x,")"),y="Demeter2: PRMT5")+
+    stat_cor(method = "pearson")#, label.x = 3, label.y = 30)
+  ggsave(filename = paste0("../Outputs/graphics/scatter_multiomic_",x,"_rnaD2PRMT5.png"),plot = scatR,width = 4,height = 4)
+  
+})
 
 
 
