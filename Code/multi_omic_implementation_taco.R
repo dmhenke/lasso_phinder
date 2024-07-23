@@ -40,9 +40,10 @@ X_rna <- X
 
 # Define CNV table ####
 X_cnv <- cnv
+X_cnv <- na.omit(log2(X_cnv))
+# X_cnv <- X_cnv[, apply(X_cnv, 2, var) > 0]
 # offsetlog2 <- max(log2(cnv[which(cnv>2)]))+0.2
 # X_cnv[which(cnv<2)] <- cnv[which(cnv<2)] +2^(-offsetlog2)*(2-cnv[which(cnv<2)] )
-X_cnv <- na.omit(log2(X_cnv))
 
 
 # Define mutation table ####
@@ -102,3 +103,9 @@ resl <- lapply(c("demeter2","kronos"),function(scr){
     }
   })
 })
+
+# PRMT5
+  system.time({
+  run_analysisSingle(whichY="demeter2", gene='PRMT5',omics=list(X_cnv),which_omic="CNV")
+  })
+  
