@@ -28,6 +28,12 @@ find_lambda <- function(X, y, plot = F){
   fitcv$lambda.min # more conservative vs 'lambda.min'
 }
 
+## Scale input data (by gene)
+scale <- function(matr){
+  apply(matr, 2, function(x)
+    (x - mean(x))/sd(x))
+}
+
 ## Given matrix of correlation between predicted and observed values from
 
 ## cross-validation across range of phi values, find best phi ####
@@ -170,7 +176,7 @@ run_analysis <- function(y, gene){
   
   X_mut_ok <- X_mut[ok_cells, ]
   X_mut_ok <- X_mut_ok[, colSums(X_mut_ok) >= 5]
-  
+
   X_cnv_ok  <- X_cnv[ok_cells, ]
   X_cnv_ok <- X_cnv_ok[, apply(X_cnv_ok, 2, var) > 0]
   
@@ -184,6 +190,19 @@ run_analysis <- function(y, gene){
     apply(matr, 2, function(x)
       (x - mean(x))/sd(x))
   }
+  
+  # All 'omics in one lasso
+  colnames(X_rna_ok) <- paste0(colnames(X_rna_ok),"_rna")
+  colnames(X_cnv_ok) <- paste0(colnames(X_cnv_ok),"_cnv")
+  colnames(X_mut_ok) <- paste0(colnames(X_mut_ok),"_mut")
+  cat_omics <- cbind(scale(X_rna_ok),scale(X_cnv_ok),scale(X_mut_ok))
+  system.time({
+  results_omics <- run_reg_lasso(
+    cat_omics, y, scores,
+    n_folds = 10, phi_range = seq(0, 1, length = 30))
+  })
+  
+  
   
   results_rna <- run_reg_lasso(
     scale(X_rna_ok), y, scores,
@@ -273,8 +292,10 @@ run_analysis <- function(y, gene){
 }
 
 # Run singleomic for list of genes on D2 ####
-run_analysisSingle <- function(y, gene,omics=list(X_rna,X_cnv,X_mut),which_omic=c("RNA","CNV","Mut",NULL)[4]){
+run_analysisSingle <- function(whichY="demeter2", gene,omics=list(X_rna,X_cnv,X_mut),which_omic=c("RNA","CNV","Mut",NULL)[4]){
+  if(whichY=="demeter2")y <- demeter2[,gene] else y <- kronos[, gene]
   
+  y <-na.omit(y)
   lapply(omics,function(omic){
     min_omic <- min(omic[,sample(colnames(omic),5)])
     max_omic <- max(omic[,sample(colnames(omic),5)])
@@ -290,24 +311,22 @@ run_analysisSingle <- function(y, gene,omics=list(X_rna,X_cnv,X_mut),which_omic=
       omic_OK <- omic_OK[, colSums(omic_OK) >= 5]
       which_omic<-"Mut"
     } else if(min_omic>=0 & max_omic>1|tolower(which_omic)=="rna"){
-      # "CNV"
+      # "RNA"
       omic_OK <- omic_OK[, apply(omic_OK, 2, var) > 0]
       which_omic <-"RNA"
     }else  if (min_omic<0 & max_omic>0|tolower(which_omic)=="cnv"){
-      # "RNA"
+      # "CNV"
       omic_OK <- omic_OK[, apply(omic_OK, 2, var) > 0]
       which_omic<- "CNV"
     }
     
     y_ok <- y[ok_cells]
-  
+    # check if analysis already run
+    output_file <- paste0("../Outputs/",whichY,"_",gene,"_",which_omic,"_omic.RData")
+    if(!basename(output_file) %in% list.files("../Outputs/")){
+      
   # Run LASSO ####
   scores <- get_scores(gene, ppi)
-  
-  scale <- function(matr){
-    apply(matr, 2, function(x)
-      (x - mean(x))/sd(x))
-  }
   
   results_omic <- run_reg_lasso(
     scale(omic_OK), y_ok, scores,
@@ -316,7 +335,9 @@ run_analysisSingle <- function(y, gene,omics=list(X_rna,X_cnv,X_mut),which_omic=
     omic_OK, y_ok,
     use = "pairwise.complete")[,1]
   results_omic$omic <- which_omic
-
+  # write out resutls
+  save(results_omic,file=output_file)
   return(results_omic)
+    }
 })
 }
