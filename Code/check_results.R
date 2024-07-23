@@ -59,7 +59,9 @@ plot_manhattan <- function(gene){
   ggsave(filename = paste0("../Outputs/graphics/Manhattan_",gene,"_demeter2.pdf"),plot = gHattan,width = 6,height = 4)
   plot(gHattan)
 }
-plot_manhattan2 <- function(gene,resin=res){
+plot_manhattan2 <- function(gene="PRMT5",resIn='demeter2_PRMT5_CNV_omic.RData'){
+  load(paste0("../Outputs/",resIn)) # results_omic
+  # resin <- res
   y <- demeter2[, gene]
   y <- y[!is.na(y)]
   
@@ -75,11 +77,12 @@ plot_manhattan2 <- function(gene,resin=res){
   aframe <- aframe[order(aframe$chromosome_name, aframe$start_position),]
   aframe$rank <- 1:nrow(aframe)
   
-  subm <- resin[resin$omic == "CNV", ]
-  subm$betas_pen[which(subm$betas_pen==0)]<- NA;subm$betas[which(subm$betas==0)]<- NA;
-  aframe$betas_pen <- subm$betas_pen[match(aframe$gene, subm$gene)]
-  aframe$betas <- subm$betas[match(aframe$gene, subm$gene)]
-  aframe$bestlogic <- apply(cbind(aframe$betas_pen,aframe$betas),1,function(x){ 
+  subm <- results_omic#[resin$omic == "CNV", ]
+  subm_betas <- subm$betas[match(aframe$gene, rownames(subm$betas)),]
+  subm_betas$betas_pen[which(subm_betas$betas_pen==0)]<- NA;subm_betas$betas[which(subm_betas$betas==0)]<- NA;
+  aframe$betas_pen <- subm_betas$betas_pen#[match(aframe$gene, rownames(subm_betas))]
+  aframe$betas <- subm_betas$betas#[match(aframe$gene, rownames(subm_betas))]
+  aframe$betalogic <- apply(cbind(aframe$betas_pen,aframe$betas),1,function(x){ 
     if(is.na(x[1])&is.na(x[2])) NA else if(!is.na(x[1])&is.na(x[2])) 'beta_pen' else if(!is.na(x[1])&!is.na(x[2])) 'both' else 'beta'
   })
   aframe <- aframe[!is.na(aframe$chromosome_name), ]
@@ -93,20 +96,25 @@ plot_manhattan2 <- function(gene,resin=res){
     geom_hline(yintercept = 0, linetype = 2, color = "red") +
     geom_point(size=0.3) +
     # geom_label(
-    #   data = aframe[!is.na(aframe$bestlogic),],
-    #   aes(label = gene, color = bestlogic)) +
+    #   data = aframe[!is.na(aframe$betalogic ),],
+    #   aes(label = gene, color = betalogic )) +
+    # scale_x_discrete(breaks, labels, limits)+ # consider changing to chr # instead of gene rank
     scale_color_manual(guide='none', breaks=c(1:22,"beta_pen","both","beta"),
                        values = c(rep(c("black", "grey"), 11),"darkblue","purple","darkred")) +
     labs(x=lab_x,y=lab_y)+
     theme_classic()  
   g_fullLab <- g_full +
     geom_label(
-      data = aframe[!is.na(aframe$bestlogic),],
-      aes(label = gene, color = bestlogic)) 
+      data = aframe[which(aframe$betalogic =='beta'),],
+      aes(label = gene, color = betalogic , size = abs(betas)))+
+    geom_label(
+      data = aframe[which(!is.na(aframe$betalogic )&aframe$betalogic !='beta'),],
+      aes(label = gene, color = betalogic , size = abs(betas_pen)))+
+    scale_size(guide = 'none')
   ggsave(filename = paste0("../Outputs/graphics/Manhattan_",gene,"_demeter2.png"),plot = g_full,width = 6,height = 4)
   ggsave(filename = paste0("../Outputs/graphics/Manhattan_",gene,"_demeter2.pdf"),plot = g_full,width = 6,height = 4)
-  ggsave(filename = paste0("../Outputs/graphics/Manhattan_",gene,"_labs_demeter2.png"),plot = g_fullLab,width = 6,height = 4)
-  ggsave(filename = paste0("../Outputs/graphics/Manhattan_",gene,"_labs_demeter2.pdf"),plot = g_fullLab,width = 6,height = 4)
+  ggsave(filename = paste0("../Outputs/graphics/Manhattan_",gene,"_labs_demeter2.png"),plot = g_fullLab,width = 9,height = 6)
+  ggsave(filename = paste0("../Outputs/graphics/Manhattan_",gene,"_labs_demeter2.pdf"),plot = g_fullLab,width = 9,height = 6)
   
   
 
@@ -207,9 +215,9 @@ X_rna <- X
 
 # Define CNV table ####
 X_cnv <- cnv
+X_cnv <- na.omit(log2(X_cnv))
 # offsetlog2 <- max(log2(cnv[which(cnv>2)]))+0.2
 # X_cnv[which(cnv<2)] <- cnv[which(cnv<2)] +2^(-offsetlog2)*(2-cnv[which(cnv<2)] )
-X_cnv <- na.omit(log2(X_cnv))
 
 
 # Load gene coordinates ####
@@ -274,9 +282,11 @@ tmp <- tmp[tmp$betas_pen != 0, ]
 plot_manhattan(gene = "EGFR")
 
 # Multiomic: PRMT5 ####
+# load("../Outputs/demeter2_PRMT5_results_multiomic.RData") # res
 load("../Outputs/demeter2_PRMT5_results_multiomic.RData") # res
 tmp <- res#[which(res$betas_pen!=0),]
 plot_manhattan(gene = "PRMT5")
+plot_manhattan2(gene = "PRMT5",resin=res)
 plot_betas_multi(res_path="../Outputs/demeter2_PRMT5_results_multiomic.RData")
 plot_Xcompare(gene="PRMT5",gene2="MTAP",score_nam="demeter2",X_=cnv,omic="CNV")
 plot_Xcompare(gene="PRMT5",gene2="MTAP",score_nam="demeter2",X_=mut,omic="MUT")
@@ -287,10 +297,13 @@ plot_Xcompare(gene="PRMT5",gene2="MTAP",score_nam="demeter2",X_=mut,omic="MUT")
 # 2) scallter copynumber nutral lines (prmt5 & mtap), rna vs d2
 # box and scatter plots
 lapply(c("PRMT5","MTAP"),function(x){
-
-  dfin <- data.frame(cnv=cnv[intersect(rownames(cnv),rownames(demeter2)),x],d2=demeter2[intersect(rownames(cnv),rownames(demeter2)),"PRMT5"])
-  scat <- ggplot(dfin,aes(x=cnv,y=d2))+geom_point(alpha=0.8)+theme_classic()+
-    labs(         x=paste0("CNV (",x,")"),y="Demeter2: PRMT5")
+  samps <- intersect(rownames(cnv),rownames(demeter2))
+  dfin <- data.frame(cnv=cnv[samps,x],d2=demeter2[samps,"PRMT5"])
+  scat <- ggplot(dfin,aes(x=cnv,y=d2))+
+    geom_vline(xintercept = 1,linetype='dashed')+
+    annotate("rect",xmin=-.05,xmax=0.05,ymin=-2,ymax=0.3,color='blue',fill='white',linewidth=1.5)+
+    geom_point(alpha=0.8)+theme_classic()+
+    labs(x=paste0("CNV (",x,")"),y="Demeter2: PRMT5")
   boxUP <- ggplot(dfin,aes(x=cnv>=1.2,y=d2))+geom_boxplot(alpha=0.8)+theme_classic()+
     ggpubr::stat_compare_means(comparisons =list(c(1,2)))+
     labs(#title=paste0("CNV: ",x," vs Demeter2: PRMT5"),
@@ -312,6 +325,21 @@ lapply(c("PRMT5","MTAP"),function(x){
   ggsave(filename = paste0("../Outputs/graphics/BoxP_multiomic_3_",x,"_cnvD2PRMT5.png"),plot = boxTRIO,width = 4,height = 4)
   ggsave(filename = paste0("../Outputs/graphics/scatter_multiomic_",x,"_cnvD2PRMT5.png"),plot = scat,width = 4,height = 4)
   
+  # refine graph of MTAP CNV = 0
+  if(x=="MTAP"){
+    datsub <- which(dfin$cnv<=0.05)
+    df_PRMT5 <- data.frame(cnv=cnv[samps,"PRMT5"],d2=demeter2[samps,"PRMT5"])
+    
+    SubScat <- ggplot(df_PRMT5[datsub,],aes(x=cnv,y=d2))+
+      geom_vline(xintercept = 1,linetype='dashed')+
+      ggpubr::stat_cor(method='pearson')+
+      geom_point(alpha=0.8)+theme_classic()+
+      theme(panel.border = element_rect(colour = "blue", fill=NA),axis.line=element_line(color='blue'))+
+      labs(x=paste0("CNV (PRMT5)"),y="Demeter2: PRMT5")
+    ggsave(filename = paste0("../Outputs/graphics/scatter_CNV_subMTAP_D2PRMT5.png"),plot = SubScat,width = 4,height = 4)
+    
+  }
+  
   # RNA
   df2 <- data.frame(rna=rnaseq[intersect(rownames(rnaseq),rownames(demeter2)),x],d2=demeter2[intersect(rownames(rnaseq),rownames(demeter2)),"PRMT5"])
   # subset to CNV 'neutral"
@@ -323,6 +351,8 @@ lapply(c("PRMT5","MTAP"),function(x){
   ggsave(filename = paste0("../Outputs/graphics/scatter_multiomic_",x,"_rnaD2PRMT5.png"),plot = scatR,width = 4,height = 4)
   
 })
+
+plot_manhattan(gene = "MTAP")
 
 
 
