@@ -65,9 +65,10 @@ plot_manhattan2 <- function(gene="PRMT5",resIn='demeter2_PRMT5_CNV_omic.RData'){
   y <- demeter2[, gene]
   y <- y[!is.na(y)]
   
-  correl <- cor(
-    X_cnv[match(names(y), rownames(X_cnv)), ], y,
-    use = "pairwise.complete")[,1]
+  # correl <- cor(
+  #   X_cnv[match(names(y), rownames(X_cnv)), ], y,
+  #   use = "pairwise.complete")[,1]
+  correl <- results_omic$cor2score
   
   aframe <- data.frame(
     gene = names(correl),
@@ -123,7 +124,7 @@ plot_manhattan2 <- function(gene="PRMT5",resIn='demeter2_PRMT5_CNV_omic.RData'){
   which_chrome_minX <- min(which_chromePos)
   which_chrome_maxX <- max(which_chromePos)
   
-  g_chrGene <- g_full+
+  g_chrGene <- g_fullLab+
     coord_cartesian(xlim=c(which_chrome_minX,which_chrome_maxX))+
     expand_limits(x = 0, y = 0)+
     scale_x_continuous(expand = c(0, 0))+ scale_y_continuous(expand = c(0, 0))+
