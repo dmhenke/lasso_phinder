@@ -106,7 +106,7 @@ resl <- lapply(c("demeter2","kronos"),function(scr){
 
 # PRMT5
   system.time({
-  run_analysisSingle(whichY="demeter2", gene='MYC',omics=list(X_cnv),which_omic="CNV")
+  run_analysisSingle(whichY="demeter2", gene='E',omics=list(X_cnv),which_omic="CNV")
   })
   # "Lambda min: 0.0212"
   # "Best phi based on RMSE: 0.069"
