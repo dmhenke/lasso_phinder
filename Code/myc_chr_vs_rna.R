@@ -51,7 +51,7 @@ tmp <- results$correlations
 asplit <- split(1:nrow(tmp), tmp$run)
 tmp <- do.call(cbind, lapply(asplit, function(x) tmp$cor[x]))
 tmp <- apply(tmp, 2, function(x)
- (x - mean(x))/sd(x))
+  (x - mean(x))/sd(x))
 
 phi_range <- results$correlations$phi[1:30]
 median_cor <- apply(tmp, 1, mean)
@@ -225,5 +225,4 @@ ggplot(aframe, aes(variable, value)) +
   geom_jitter(width = 0.1) +
   ggpubr::stat_compare_means(method = "t.test") +
   theme_classic()
-
 
