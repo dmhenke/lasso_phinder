@@ -3,33 +3,27 @@ library(caret)
 library(ggplot2)
 library(glmnet)
 
-
 # Source code ####
 source("allfunctions.R")
-
 
 # Load STRING data ####
 load("../Data/ppi_w_symbols.RData")
 
-
 # Load DepMap data ####
 load("../Data/global.RData")
 
-### LOAD RUN MYC RNA RESULTS ####
+# Normalize RNA expression data ####
 X <- rnaseq
 expressed <- apply(X, 2, function(x) mean(x > 0))
 X <- X[, expressed > 0.95]
 X <- apply(X, 2, function(x)
   (x - mean(x))/sd(x))
 
-
 # Define outcome ####
 gene <- "MYC"
 y <- kronos[, gene]
 y <- y[!is.na(y)]
-
-
-# Run LASSO ####
+# Define working set of samples ###
 ok_cells <- intersect(
   rownames(X),
   names(y)
@@ -37,19 +31,18 @@ ok_cells <- intersect(
 
 X <- X[ok_cells, ]
 y <- y[ok_cells]
+# Generate scores ###
 scores <- get_scores(gene, ppi)
+
+# Run LASSO ####
+### LOAD RUN MYC RNA RESULTS ####
 file_myc_rnaKRONOS <- "kronos_MYC_RNA_omic.RData"
 if(file_myc_rnaKRONOS%in% list.files("../Outputs/")){
   load(paste0("../Outputs/",file_myc_rnaKRONOS))
 } else{
-# Normalize RNA expression data ####
-
-
-
 results <- run_reg_lasso(
   X, y, scores,
   n_folds = 10, phi_range = seq(0, 1, length = 30))
-
 save(results,file=paste0("../Outputs/",file_myc_rnaKRONOS))
 }
 
@@ -75,15 +68,15 @@ fitline<- coef(lm(cor ~ phi, data = aframe[c(1,30),]))
 ggplot(aframe, aes(phi, cor)) +
   labs(
     title = "MYC [Chronos] vs RNA expression",
-    y = "Median standardized RMSE",
+    y = "Median standardized RMSE", #standardized between x-validation by selected phi
     x = "phi"
   ) +
   geom_abline(intercept=fitline[1],slope=fitline[2],color='red') +
   geom_point() +
   geom_vline(xintercept = results[[1]],linetype='dashed') +
   theme_classic()
-ggsave(filename = paste0("../Outputs/Fig2A_myc_phiselect.png"),height=4,width=4)
-ggsave(filename = paste0("../Outputs/Fig2A_myc_phiselect.pdf"),height=4,width=4)
+ggsave(filename = paste0("../Outputs/Fig1X_myc_phiselect.png"),height=4,width=4)
+ggsave(filename = paste0("../Outputs/Fig1X_myc_phiselect.pdf"),height=4,width=4)
 
 # Show non-zero coefficients ####
 aframe <- data.frame(
@@ -94,32 +87,59 @@ aframe <- data.frame(
 aframe$gene <- factor(
   aframe$gene, 
   levels = aframe$gene[order(aframe$betas_pen)])
-
-ggplot(aframe[aframe$betas_pen != 0, ], aes(betas_pen, gene)) +
+ggplot(aframe[order(abs(aframe$betas_pen),decreasing = T)[1:40], ], aes(betas_pen, gene)) +
   labs(
     y = "Informative & relevant features",
     x = "Regularized LASSO coefficient"
   ) +
   geom_bar(stat = "identity") +
   theme_classic()
+ggsave(filename = paste0("../Outputs/Fig2A_myc_top40betaPen_barplz.pdf"),height=4,width=4)
 
 
 # Compare to regular correlation coefficients ####
 aframe$label <- aframe$gene
 aframe$label[aframe$betas_pen == 0] <- NA
 
-g_betaPen_myc <- ggplot(aframe, aes(cor, betas_pen,
+# myc beta results
+myc_xmin <- -0.05
+myc_xmax <- 0.05
+myc_ymin <- -0.05
+myc_ymax <- 0.05
+
+g_betaPen_myc <- ggplot(aframe, aes(betas, betas_pen,
                    label = label)) +
   labs(
     y = "Regularized LASSO beta coefficient",
-    x = "Correlation coefficient"
+    x = "LASSO beta coefficient"
   ) +
+  annotate('rect',xmin=myc_xmin,xmax=myc_xmax,ymin=myc_ymin,ymax=myc_ymax,color='black',alpha=.9,fill='white',linetype="dashed")+
   geom_point() +
   # ggrepel::geom_label_repel(max.overlaps = 20) +
   ggrepel::geom_label_repel(data = aframe[which(aframe$gene=="MYC"),],
                             aes(label = gene))+
   theme_classic()
-ggsave(filename = paste0("../Outputs/Fig2B_myc_phiselect.pdf"),height=4,width=4,plot = g_betaPen_myc)
+ggsave(filename = paste0("../Outputs/Fig2B_myc_betaVSbetapen.pdf"),height=4,width=4,plot = g_betaPen_myc)
+
+#zoom in on non-myc results
+g_betaPen_mycSub<- ggplot(aframe[aframe$gene != "MYC", ], aes(betas, betas_pen, 
+                                           color = cor,
+                                           label = label)) +
+  geom_vline(xintercept = 0,linetype='dashed')+
+  geom_hline(yintercept = 0,linetype='dashed')+
+  labs(
+    y = "Regularized LASSO coefficient",
+    x = "LASSO coefficient"
+  ) +
+  scale_color_gradient2(
+    low = "blue", mid = "grey", high = "red",
+    breaks = seq(-0.5, 0.5, length = 11)) +
+  geom_point() +
+  ggrepel::geom_text_repel(max.overlaps = 20) +
+  theme_classic()
+ggsave(filename = paste0("../Outputs/Fig2C_myc_betaVScorrSub.pdf"),height=6,width=6,plot = g_betaPen_mycSub)
+
+
 
 plot_gene <- function(gene, y){
   subm <- data.frame(
@@ -140,9 +160,9 @@ plot_gene <- function(gene, y){
 g_rnaMYC<-plot_gene("MYC", y)
 g_rnUBR5<-plot_gene("UBR5", y)
 g_rnaWEE1<-plot_gene("WEE1", y)
-ggsave(filename = paste0("../Outputs/Fig2C_RNA_MYC.pdf"),height=4,width=4,plot = g_rnaMYC)
-ggsave(filename = paste0("../Outputs/Fig2C_RNA_UBR5.pdf"),height=4,width=4,plot = g_rnUBR5)
-ggsave(filename = paste0("../Outputs/Fig2C_RNA_WEE1.pdf"),height=4,width=4,plot = g_rnaWEE1)
+ggsave(filename = paste0("../Outputs/Fig2D_RNA_MYC.pdf"),height=4,width=4,plot = g_rnaMYC)
+ggsave(filename = paste0("../Outputs/Fig2D_RNA_UBR5.pdf"),height=4,width=4,plot = g_rnUBR5)
+ggsave(filename = paste0("../Outputs/Fig2D_RNA_WEE1.pdf"),height=4,width=4,plot = g_rnaWEE1)
 
 # Run one more time ####
 results_new <- run_reg_lasso(
@@ -161,10 +181,10 @@ g_betPen_1v2<- ggplot(aframe,
     y = "Run 2"
   ) +
   geom_abline(intercept = 0,slope=1)+
-  geom_point() +
+  geom_point(alpha=0.5) +
   ggpubr::stat_cor() +
   theme_classic()
-ggsave(filename = paste0("../Outputs/Fig2D_betaPen_run1vs2.pdf"),height=4,width=4,plot = g_betPen_1v2)
+ggsave(filename = paste0("../Outputs/FigS2A_betaPen_run1vs2.pdf"),height=4,width=4,plot = g_betPen_1v2)
 
 
 # Run LASSO with MYC score set to 0 ####
