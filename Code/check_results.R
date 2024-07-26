@@ -7,10 +7,6 @@ library(ggpubr)
 library(glmnet)
 
 
-# Source code ####
-source("allfunctions.R")
-
-
 # Load STRING data ####
 load("../Data/ppi_w_symbols.RData")
 
@@ -56,123 +52,93 @@ X_mut <- mut
 X_mut <- X_mut[, colSums(X_mut) >= 5]
 
 
-# Read skewness genes ####
-d2_genes <- scan(
-  "../Data/skewed_d2_genes.txt",
-  what = character(), sep = "\n")
-
-chr_genes <- scan(
-  "../Data/skewed_chr_genes.txt",
-  what = character(), sep = "\n")
-
-
 # Load LASSO results ####
-load("../Outputs/d2_results_multiomic.RData")
-res_d2 <- res
-names(res_d2) <- d2_genes
+files <- list.files("../Outputs/", full.names = T)
+files <- files[grep("demeter2", files)]
 
-load("../Outputs/chr_results_multiomic.RData")
-res_chr <- res
-names(res_chr) <- chr_genes
-
-
-# Assess D2 results ####
-res <- res_d2
-bad <- which(unlist(lapply(res, class)) == "try-error")
-good <- names(res)[-bad]
-d2_combined <- lapply(good, function(x){
-  if(is.null(res[[x]])) return(NULL)
-  data.frame(target = x, res[[x]])
+res <- lapply(files, function(x){
+  load(x)
+  data.frame(
+    target = strsplit(basename(x), "_", fixed = T)[[1]][2],
+    res
+  )
 })
-d2_combined <- do.call(rbind, d2_combined)
+names(res) <- unlist(lapply(files, function(x)
+  strsplit(basename(x), "_", fixed = T)[[1]][2]))
 
-tmp <- d2_combined
-tmp <- tmp[tmp$betas_pen != 0, ]
+cnv_markers <- lapply(res, function(x)
+  x[x$omic == "CNV" & x$betas_pen != 0, ])
+cnv_markers <- cnv_markers[unlist(lapply(cnv_markers, nrow)) > 0]
 
+freq_markers <- unlist(lapply(cnv_markers, nrow))
+max_cor <- unlist(lapply(cnv_markers, function(x)
+  max(abs(x$correl))))
+
+freq_markers <- data.frame(
+  gene = names(freq_markers),
+  freq = freq_markers,
+  max_cor)
+
+ggplot(freq_markers, aes(x = freq)) +
+  labs(x = "Number of CNV biomarkers") +
+  geom_histogram() +
+  theme_classic()
+
+
+# Check FLT4 ####
+plot_top_hits <- function(gene){
+  tmp <- res[[gene]]
+  tmp <- tmp[tmp$betas_pen != 0, ]
+  tmp$marker <- paste(tmp$gene, tmp$omic, sep = "_")
+  tmp$marker <- factor(
+    tmp$marker,
+    levels = tmp$marker[order(tmp$betas_pen)])
+  tmp <- tmp[order(tmp$marker), ]
+  tmp <- tmp[c(1:20, (nrow(tmp) - 10): nrow(tmp)), ]
+  
+  ggplot(tmp, aes(betas_pen, marker, fill = omic)) +
+    labs(title = gene) +
+    geom_bar(stat = "identity") +
+    labs(x = "Beta coefficient", y = "Biomarker") +
+    theme_classic()  
+}
+plot_top_hits("HPRT1")
 
 plot_manhattan <- function(gene){
   y <- demeter2[, gene]
   y <- y[!is.na(y)]
-  
-  correl <- cor(
-    X_cnv[match(names(y), rownames(X_cnv)), ], y,
-    use = "pairwise.complete")[,1]
-  
-  aframe <- data.frame(
+  ok <- intersect(names(y), rownames(X_cnv))
+  correl <- cor(X_cnv[ok, ], y[ok])[,1]
+  correl <- data.frame(
     gene = names(correl),
-    gene_info[match(names(correl), gene_info$hgnc_symbol), ],
-    correl
-  )
-  aframe <- aframe[order(aframe$chromosome_name, aframe$start_position),]
-  aframe$rank <- 1:nrow(aframe)
+    correl = correl)
   
-  subm <- tmp[tmp$target == gene & tmp$omic == "CNV", ]
-  aframe$betas_pen <- subm$betas_pen[match(aframe$gene, subm$gene)]
+  tmp <- res[[gene]]
+  tmp <- tmp[tmp$betas_pen != 0, ]
+  tmp <- tmp[tmp$omic == "CNV", ]
   
-  aframe <- aframe[!is.na(aframe$chromosome_name), ]
+  correl$betas_pen <- tmp$betas_pen[match(correl$gene, tmp$gene)]
   
-  ggplot(aframe,
-         aes(rank, correl, color = chromosome_name)) +
+  correl <- correl[match(gene_info$hgnc_symbol, correl$gene), ]
+  correl$pos <- gene_info$start_position
+  correl$chr <- gene_info$chromosome_name
+  
+  correl <- correl[order(correl$chr, correl$pos), ]
+  
+  correl$rank <- 1:nrow(correl)
+  
+  ggplot(correl, aes(rank, correl)) +
     labs(
-      title = gene, 
-      y = "Pearson correlation coefficient",
-      x = "Gene sorted by genomic location"
+      title = gene,
+      x = "Genes sorted by genomic location",
+      y = "Pearson correlation"
     ) +
-    geom_hline(yintercept = 0, linetype = 2, color = "red") +
     geom_point() +
-    geom_label(
-      data = aframe[!is.na(aframe$betas_pen),], 
-      aes(label = gene), color = "blue") +
-    scale_color_manual(values = rep(c("black", "grey"), 11)) +
-    theme_classic()  
+    geom_text(data = correl[correl$betas_pen != 0, ],
+              aes(label = gene, size = abs(betas_pen)),
+              color = "red") +
+    theme_classic() +
+    theme(legend.position = "none")
 }
-plot_manhattan(gene = "MCM2")
-plot_manhattan(gene = "RBM39")
-plot_manhattan(gene = "DDX46")
-
-
-plot_gene <- function(gene){
-  subm <- tmp[tmp$target == gene, ]
-  subm <- subm[order(-abs(subm$betas_pen)), ]
-  subm <- subm[1:20, ]
-  
-  subm$gene <- factor(subm$gene, levels = unique(subm$gene))
-  
-  ggplot(subm, aes(betas_pen, gene, fill = omic)) +
-    geom_bar(stat = "identity") +
-    labs(
-      title = gene, 
-      subtitle = "Top 20 multi-omic biomarkers",
-      y = "Biomarker",
-      x = "Regularized LASSO beta"
-    ) +
-    geom_vline(xintercept = 0, linetype = 2) +
-    geom_text(aes(label = gene), size = 3) +
-    theme_classic() 
-}
-plot_gene("AURKA")
-plot_gene("TUBB")
-
-
-gene <- "AURKA"
-subm <- tmp[tmp$target == gene, ]
-n_mut <- rowSums(
-  X_mut[, intersect(subm$gene, colnames(X_mut))])
-
-ok <- intersect(rownames(X_mut), rownames(demeter2))
-boxplot(split(demeter2[ok, gene], n_mut[ok]))
-
-
-# Assess Chronos results ####
-res <- res_chr
-bad <- which(unlist(lapply(res, class)) == "try-error")
-good <- names(res)[-bad]
-chr_combined <- lapply(good, function(x){
-  if(is.null(res[[x]])) return(NULL)
-  data.frame(target = x, res[[x]])
-})
-chr_combined <- do.call(rbind, chr_combined)
-
-tmp <- chr_combined
-tmp <- tmp[tmp$betas_pen != 0, ]
+plot_manhattan("FLT4")
 
