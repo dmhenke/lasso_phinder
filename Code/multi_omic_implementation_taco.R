@@ -293,6 +293,11 @@ resl <- lapply(c("demeter2","kronos"),function(scr){
   
   # Oct4 (Pou5f1), Sox2, Klf4 and cMyc.
   
-  lapply(c('POU5F1','SOX2','KLF4','MYC'),function(x)  run_analysisSingle(whichY="demeter2", gene=x,omics=list(X_cnv),which_omic="CNV"))
+lapply(c('POU5F1','SOX2','KLF4','MYC'),function(x)  run_analysisSingle(whichY="demeter2", gene=x,omics=list(X_cnv),which_omic="CNV"))
   
+# EGFR ####
+run_analysisSingle(whichY="demeter2", gene='EGFR',omics=list(X_cnv),which_omic="CNV")
+
+# EGFR ####
+run_analysisSingle(whichY="demeter2", gene='DMAP1',omics=list(X_cnv),which_omic="CNV")
   
