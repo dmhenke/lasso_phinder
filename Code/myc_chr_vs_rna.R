@@ -190,6 +190,7 @@ ggsave(filename = paste0("../Outputs/FigS2A_betaPen_run1vs2.pdf"),height=4,width
 # Run LASSO with MYC score set to 0 ####
 scores["MYC"] <- 0
 
+set.seed(202407)
 results_myc0 <- run_reg_lasso(
   X, y, scores,
   n_folds = 10, phi_range = seq(0, 1, length = 30))
@@ -211,11 +212,11 @@ g_regBeta_set0 <- ggplot(aframe,
     y = "MYC score set to 0"
   ) +
   geom_abline(intercept = 0,slope=1)+
-  geom_point() +
+  geom_point(alpha=0.5) +
   ggrepel::geom_label_repel() +
   ggpubr::stat_cor() +
   theme_classic()
-ggsave(filename = paste0("../Outputs/Fig2E_betaPen_runvsZero.pdf"),height=4,width=4,plot = g_regBeta_set0)
+ggsave(filename = paste0("../Outputs/FigS3_betaPen_runvsZero.pdf"),height=4,width=4,plot = g_regBeta_set0)
 
 # Compare biomarkers to predict MYC dependency in D2 ####
 myc_d2 <- demeter2[, "MYC"]
