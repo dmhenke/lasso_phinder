@@ -89,12 +89,12 @@ aframe$gene <- factor(
   levels = aframe$gene[order(aframe$betas_pen)])
 ggplot(aframe[order(abs(aframe$betas_pen),decreasing = T)[1:40], ], aes(betas_pen, gene)) +
   labs(
-    y = "Informative & relevant features",
+    y = "Informative & relevant features [top 40]",
     x = "Regularized LASSO coefficient"
   ) +
   geom_bar(stat = "identity") +
   theme_classic()
-ggsave(filename = paste0("../Outputs/Fig2A_myc_top40betaPen_barplz.pdf"),height=4,width=4)
+ggsave(filename = paste0("../Outputs/Fig2A_myc_top40betaPen_barplz.pdf"),height=8,width=5)
 
 
 # Compare to regular correlation coefficients ####
@@ -125,8 +125,8 @@ ggsave(filename = paste0("../Outputs/Fig2B_myc_betaVSbetapen.pdf"),height=4,widt
 g_betaPen_mycSub<- ggplot(aframe[aframe$gene != "MYC", ], aes(betas, betas_pen, 
                                            color = cor,
                                            label = label)) +
-  geom_vline(xintercept = 0,linetype='dashed')+
-  geom_hline(yintercept = 0,linetype='dashed')+
+  # geom_vline(xintercept = 0,linetype='dashed')+
+  # geom_hline(yintercept = 0,linetype='dashed')+
   labs(
     y = "Regularized LASSO coefficient",
     x = "LASSO coefficient"
@@ -136,8 +136,10 @@ g_betaPen_mycSub<- ggplot(aframe[aframe$gene != "MYC", ], aes(betas, betas_pen,
     breaks = seq(-0.5, 0.5, length = 11)) +
   geom_point() +
   ggrepel::geom_text_repel(max.overlaps = 20) +
-  theme_classic()
-ggsave(filename = paste0("../Outputs/Fig2C_myc_betaVScorrSub.pdf"),height=6,width=6,plot = g_betaPen_mycSub)
+  theme_classic()  +
+  ggpubr::border(linetype='dashed')
+
+ggsave(filename = paste0("../Outputs/Fig2C_myc_betaVScorrSub.pdf"),height=4,width=5,plot = g_betaPen_mycSub)
 
 
 
@@ -154,15 +156,15 @@ plot_gene <- function(gene, y){
     ) +
     geom_smooth(method = "lm",se=F) +
     geom_point() +
-    ggpubr::stat_cor() +
+    ggpubr::stat_cor(label.sep='\n') +
     theme_classic() 
 }
 g_rnaMYC<-plot_gene("MYC", y)
-g_rnUBR5<-plot_gene("UBR5", y)
-g_rnaWEE1<-plot_gene("WEE1", y)
+g_rnSTAT5A <-plot_gene("STAT5A", y)
+g_rnaSMARCB1 <-plot_gene("SMARCB1", y)
 ggsave(filename = paste0("../Outputs/Fig2D_RNA_MYC.pdf"),height=4,width=4,plot = g_rnaMYC)
-ggsave(filename = paste0("../Outputs/Fig2D_RNA_UBR5.pdf"),height=4,width=4,plot = g_rnUBR5)
-ggsave(filename = paste0("../Outputs/Fig2D_RNA_WEE1.pdf"),height=4,width=4,plot = g_rnaWEE1)
+ggsave(filename = paste0("../Outputs/Fig2D_RNA_STAT5A.pdf"),height=4,width=4,plot = g_rnSTAT5A)
+ggsave(filename = paste0("../Outputs/Fig2D_RNA_SMARCB1.pdf"),height=4,width=4,plot = g_rnaSMARCB1)
 
 # Run one more time ####
 results_new <- run_reg_lasso(
@@ -182,7 +184,7 @@ g_betPen_1v2<- ggplot(aframe,
   ) +
   geom_abline(intercept = 0,slope=1)+
   geom_point(alpha=0.5) +
-  ggpubr::stat_cor() +
+  ggpubr::stat_cor(label.sep='\n') +
   theme_classic()
 ggsave(filename = paste0("../Outputs/FigS2A_betaPen_run1vs2.pdf"),height=4,width=4,plot = g_betPen_1v2)
 
@@ -214,7 +216,7 @@ g_regBeta_set0 <- ggplot(aframe,
   geom_abline(intercept = 0,slope=1)+
   geom_point(alpha=0.5) +
   ggrepel::geom_label_repel() +
-  ggpubr::stat_cor() +
+  ggpubr::stat_cor(label.sep='\n') +
   theme_classic()
 ggsave(filename = paste0("../Outputs/FigS3_betaPen_runvsZero.pdf"),height=4,width=4,plot = g_regBeta_set0)
 
