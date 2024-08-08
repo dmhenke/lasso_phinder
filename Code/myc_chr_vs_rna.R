@@ -48,27 +48,25 @@ results <- run_reg_lasso(
 
 # Show how phi was inferred ####
 tmp <- results$correlations
-asplit <- split(1:nrow(tmp), tmp$run)
-tmp <- do.call(cbind, lapply(asplit, function(x) tmp$cor[x]))
-tmp <- apply(tmp, 2, function(x)
- (x - mean(x))/sd(x))
-
-phi_range <- results$correlations$phi[1:30]
 median_cor <- apply(tmp, 1, mean)
 
 aframe <- data.frame(
-  phi = phi_range, 
+  phi = seq(0, 1, length = 30), 
   cor = median_cor)
 
 ggplot(aframe, aes(phi, cor)) +
   labs(
     title = "MYC [Chronos] vs RNA expression",
-    y = "Average standardized correlation",
+    y = "Average z-scored RMSE",
     x = "phi"
   ) +
   geom_line() + geom_point() +
-  geom_vline(xintercept = results[[1]]$best_cor_phi) +
+  geom_vline(xintercept = results[[1]]) +
   theme_classic()
+
+ggsave(
+  "../Outputs/figs/myc_rna_phi_curve.pdf",
+  width = 5, height = 5)
 
 
 # Show non-zero coefficients ####
@@ -81,29 +79,58 @@ aframe$gene <- factor(
   aframe$gene, 
   levels = aframe$gene[order(aframe$betas_pen)])
 
-ggplot(aframe[aframe$betas_pen != 0, ], aes(betas_pen, gene)) +
+aframe <- aframe[order(-abs(aframe$betas_pen)), ]
+
+ggplot(aframe[aframe$betas_pen != 0, ][1:40, ], aes(betas_pen, gene)) +
   labs(
-    y = "Informative & relevant features",
+    y = "Informative & relevant features [top 40]",
     x = "Regularized LASSO coefficient"
   ) +
   geom_bar(stat = "identity") +
   theme_classic()
 
+ggsave(
+  "../Outputs/figs/myc_rna_top40_barplot.pdf",
+  width = 5, height = 8)
 
-# Compare to regular correlation coefficients ####
+
+# Compare to standard LASSO coefficients ####
 aframe$label <- aframe$gene
 aframe$label[aframe$betas_pen == 0] <- NA
 
-ggplot(aframe, aes(cor, betas_pen,
+p1 <- ggplot(aframe, aes(betas, betas_pen,
                    label = label)) +
   labs(
     y = "Regularized LASSO coefficient",
-    x = "Correlation coefficient"
+    x = "LASSO coefficient"
   ) +
   geom_point() +
   ggrepel::geom_label_repel(max.overlaps = 20) +
   theme_classic()
 
+p2 <- ggplot(aframe[aframe$gene != "MYC", ], aes(betas, betas_pen, 
+                   color = cor,
+                   label = label)) +
+  labs(
+    y = "Regularized LASSO coefficient",
+    x = "LASSO coefficient"
+  ) +
+  scale_color_gradient2(
+    low = "blue", mid = "grey", high = "red",
+    breaks = seq(-0.2, 0.2, length = 5)) +
+  geom_point() +
+  ggrepel::geom_text_repel(max.overlaps = 20) +
+  theme_classic()
+
+p <- gridExtra::grid.arrange(p1, p2, ncol = 2)
+
+ggsave(
+  plot = p,
+  filename = "../Outputs/figs/myc_betas_reg_vs_standard.pdf",
+  width = 11, height = 5)
+
+
+# Highlight some genes ####
 plot_gene <- function(gene, y){
   subm <- data.frame(
     gene = X[, gene],
@@ -120,9 +147,17 @@ plot_gene <- function(gene, y){
     ggpubr::stat_cor() +
     theme_classic() 
 }
-plot_gene("MYC", y)
-plot_gene("UBR5", y)
-plot_gene("WEE1", y)
+p1 <- plot_gene("MYC", y)
+p2 <- plot_gene("STAT5A", y)
+p3 <- plot_gene("SMARCB1", y)
+
+p <- gridExtra::grid.arrange(p1, p2, p3, ncol = 3)
+
+ggsave(
+  plot = p, 
+  filename = "../Outputs/figs/myc_single_gene_examples.pdf",
+  width = 15, height = 5)
+
 
 # Run one more time ####
 results_new <- run_reg_lasso(
@@ -143,6 +178,10 @@ ggplot(aframe,
   geom_point() +
   ggpubr::stat_cor() +
   theme_classic()
+
+ggsave(
+  "../Outputs/figs/myc_reproduce.pdf",
+  width = 5, height = 5)
 
 
 # Run LASSO with MYC score set to 0 ####
@@ -172,6 +211,10 @@ ggplot(aframe,
   ggrepel::geom_label_repel() +
   ggpubr::stat_cor() +
   theme_classic()
+
+ggsave(
+  "../Outputs/figs/myc_score_set_to_zero.pdf",
+  width = 5, height = 5)
 
 
 # Compare biomarkers to predict MYC dependency in D2 ####
