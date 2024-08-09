@@ -84,13 +84,33 @@ plot_manhattan2 <- function(gene="PRMT5",resIn='demeter2_PRMT5_CNV_omic.RData',s
     if(is.na(x[1])&is.na(x[2])) NA else if(!is.na(x[1])&is.na(x[2])) 'beta_pen' else if(!is.na(x[1])&!is.na(x[2])) 'both' else 'beta'
   })
   aframe <- aframe[!is.na(aframe$chromosome_name), ]
+  aframe$betasize <- aframe$betas;  aframe$betasize[!is.na(aframe$betas_pen)] <- aframe$betas_pen[!is.na(aframe$betas_pen)]
+  aframe$betasize <- abs(aframe$betasize)
   # labs
   lab_x <- "Gene ordered by genomic coordinate"
   lab_y <- paste0("Correlation (r)\n",gene," Dependency (D2) with CNV")
   
+  # Subplot of chr
+  if(is.na(subplotChr)){
+    which_chrome <- aframe[which(aframe$gene==gene),"chromosome_name"]
+  } else which_chrome <- subplotChr
+  which_chromePos <- which(aframe$chromosome_name==which_chrome)
+  # x min max
+  which_chrome_minX <- min(which_chromePos)
+  which_chrome_maxX <- max(which_chromePos)
+  # y min max
+  which_chrome_minY <-  min (aframe[which(aframe$chromosome_name==which_chrome),'correl'])
+  which_chrome_maxY <-  max (aframe[which(aframe$chromosome_name==which_chrome),'correl'])
+  
+  if(gene=="EGFR") {
+    add_rec <- geom_rect(aes(xmin = which_chrome_minX, xmax =which_chrome_maxX, ymin = which_chrome_minY, ymax = which_chrome_maxY), 
+                              fill =NA, alpha = 0.4, color = "purple")
+    } else add_rec <- NULL
+  
   g_full <- ggplot(aframe,
                    aes(rank, correl, color = chromosome_name)) +
     geom_hline(yintercept = 0, linetype = 2, color = "red") +
+    add_rec+
     geom_point(size=0.3) +
     # geom_text(
     #   data = aframe[!is.na(aframe$betalogic ),],
@@ -100,73 +120,96 @@ plot_manhattan2 <- function(gene="PRMT5",resIn='demeter2_PRMT5_CNV_omic.RData',s
                        values = c(rep(c("black", "grey"), 11),"darkblue","purple","darkred")) +
     labs(x=lab_x,y=lab_y)+
     theme_classic()  
+  
   g_fullLab <- g_full +
-    geom_text(check_overlap = T,
-      data = aframe[which(aframe$betalogic =='beta'),],
-      aes(label = gene, color = betalogic , size = abs(betas)))+
-    geom_text(check_overlap = T,
-      data = aframe[which(!is.na(aframe$betalogic )&aframe$betalogic !='beta'),],
-      aes(label = gene, color = betalogic , size = abs(betas_pen)))+
+    # geom_text(check_overlap = T,
+    #   data = aframe[which(aframe$betalogic =='beta'),],
+    #   aes(label = gene, color = betalogic , size = abs(betas)))+
+    ggrepel::geom_text_repel(#point.padding = .5,
+      min.segment.length = 0,
+      force=1,direction='both',max.overlaps=100,
+      max.time = .3, max.iter = 1e5,#box.padding = 0,
+      data =aframe[!is.na(aframe$betalogic),],
+      aes(label = gene, color = betalogic,size=betasize))+
+    # geom_text(check_overlap = T,
+    #   data = aframe[which(!is.na(aframe$betalogic )&aframe$betalogic !='beta'),],
+      # aes(label = gene, color = betalogic , size = abs(betas_pen)))+
+
+  # ggrepel::geom_text_repel(#point.padding = .5,
+  #   # min.segment.length = 0,
+  #   force=1,direction='both',max.overlaps=100,
+  #   max.time = .3, max.iter = 1e5,#box.padding = 0,
+  #   data = res[which(abs(res$betas)>=quantile(abs(res$betas),.9) | abs(res$betas_pen)>=quantile(abs(res$betas_pen),.9)),],
+  #   aes(label = gene, color = omic),size=2)
     scale_size(guide = 'none')
   ggsave(filename = paste0("../Outputs/graphics/Manhattan_",gene,"_demeter2.png"),plot = g_full,width = 10,height = 5)
   ggsave(filename = paste0("../Outputs/graphics/Manhattan_",gene,"_demeter2.pdf"),plot = g_full,width = 10,height = 5)
   ggsave(filename = paste0("../Outputs/graphics/Manhattan_",gene,"_labs_demeter2.png"),plot = g_fullLab,width = 10,height = 5)
   ggsave(filename = paste0("../Outputs/graphics/Manhattan_",gene,"_labs_demeter2.pdf"),plot = g_fullLab,width = 10,height = 5)
-  
-  if(is.na(subplotChr)){
-  which_chrome <- aframe[which(aframe$gene==gene),"chromosome_name"]
-  } else which_chrome <- subplotChr
-  which_chromePos <- which(aframe$chromosome_name==which_chrome)
-  which_chrome_minX <- min(which_chromePos)
-  which_chrome_maxX <- max(which_chromePos)
-  
+
   g_chrGene <- g_fullLab+
-    coord_cartesian(xlim=c(which_chrome_minX,which_chrome_maxX))+
+    coord_cartesian(xlim=c(which_chrome_minX,which_chrome_maxX),
+                    ylim=c(which_chrome_minY,which_chrome_maxY))+
     expand_limits(x = 0, y = 0)+
     scale_x_continuous(expand = c(0, 0))+ scale_y_continuous(expand = c(0, 0))+
     labs(x=paste0("Chromosome ",which_chrome))
-  ggsave(filename = paste0("../Outputs/graphics/Manhattan_",gene,"_chr",which_chrome,"_demeter2.png"),plot = g_chrGene,width = 2,height = 4)
-  ggsave(filename = paste0("../Outputs/graphics/Manhattan_",gene,"_chr",which_chrome,"_demeter2.pdf"),plot = g_chrGene,width = 2,height = 4)
-  plot(g_fullLab)
-  plot(g_chrGene)
-  
+  ggsave(filename = paste0("../Outputs/graphics/Manhattan_",gene,"_chr",which_chrome,"_demeter2.png"),plot = g_chrGene,width = 4,height = 2)
+  ggsave(filename = paste0("../Outputs/graphics/Manhattan_",gene,"_chr",which_chrome,"_demeter2.pdf"),plot = g_chrGene,width = 4,height = 2)
+    
   if(gene=="EGFR"&omic=="CNV"){
   # bframe <-  reshape2::melt(aframe,measure.vars=c("betas","betas_pen","correl"))
   bframe <-  aframe;bframe$betas[is.na(bframe$betas)] <- 0;bframe$betas_pen[is.na(bframe$betas_pen)] <- 0;
+  bframe <- bframe[which(bframe$chromosome_name==which_chrome),]
   plo3b_cor<- ggplot(bframe,aes(x=rank, y=correl)) +
     geom_hline(yintercept = 0, linetype = 2, color = "red") +
     geom_point(size=0.3) +
-    # facet_grid(variable~.)+C
     coord_cartesian(xlim=c(which_chrome_minX,which_chrome_maxX))+
     expand_limits(x = 0, y = 0)+
     scale_x_continuous(expand = c(0, 0))+ scale_y_continuous(expand = c(0, 0))+
     labs(x='',y="Correlation\ncoefficient")+
-    theme_classic() 
+    theme_minimal() +
+    theme(axis.text.x=element_blank(), 
+          axis.ticks.x=element_blank(),
+          panel.background=element_rect(colour="purple"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank())
+  
   # find upper and lower bounds of y <- abs(betas)
-  B_hi <- max(c(aframe$betas,aframe$betas_pen),na.rm=T)
-  B_low <- min(c(aframe$betas,aframe$betas_pen),na.rm=T)
+  B_hi <- max(c(bframe$betas,bframe$betas_pen),na.rm=T)
+  B_low <- min(c(bframe$betas,bframe$betas_pen),na.rm=T)
   B_lim <- max(abs(B_hi),abs(B_low))
   plo3b_b<- ggplot(bframe,aes(x=rank, y=betas)) +
     geom_hline(yintercept = 0, linetype = 2, color = "red") +
     geom_point(size=0.3) +
     coord_cartesian(xlim=c(which_chrome_minX,which_chrome_maxX))+
     expand_limits(x = 0, y = 0)+
-    scale_x_continuous(expand = c(0, 0))+ scale_y_continuous(limits = c(-B_lim*1.2,B_lim*1.2),expand = c(0, 0))+
+    scale_x_continuous(expand = c(0, 0))+ scale_y_continuous(limits = c(-B_lim,B_lim),expand = c(0, 0))+
     labs(x='',y="Baseline\ncoefficient")+
-    theme_classic() +
+    theme_minimal() +
+    theme(axis.text.x=element_blank(), 
+          axis.ticks.x=element_blank(),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank())+
     scale_color_manual(guide='none', breaks=c(1:22,"beta_pen","both","beta"),
                        values = c(rep(c("black", "grey"), 11),"darkblue","purple","darkred"))+
-    geom_text(check_overlap = T,data = aframe[which(aframe$betalogic =='beta'),],
-      aes(label = gene, color = betalogic , size = abs(betas)))+
-    geom_text(check_overlap = T,data = aframe[which(!is.na(aframe$betalogic )&aframe$betalogic !='beta'),],
-      aes(label = gene, color = betalogic , size = abs(betas_pen)))+theme(legend.position ="none")
+    # geom_text(check_overlap = T,data = aframe[which(aframe$betalogic =='beta'),],
+    #   aes(label = gene, color = betalogic , size = abs(betas)))+
+    # geom_text(check_overlap = T,data = aframe[which(!is.na(aframe$betalogic )&aframe$betalogic !='beta'),],
+    #   aes(label = gene, color = betalogic , size = abs(betas_pen)))+theme(legend.position ="none")
+  ggrepel::geom_text_repel(#point.padding = .5,
+    min.segment.length = 0,
+    force=1,direction='both',max.overlaps=100,
+    max.time = .3, max.iter = 1e5,#box.padding = 0,
+    data =aframe[!is.na(aframe$betalogic),],
+    aes(label = gene, color = betalogic,size=betasize))+
+    scale_size(guide = 'none')
 
   plo3b_bp<- ggplot(bframe,aes(x=rank, y=betas_pen )) +
     geom_hline(yintercept = 0, linetype = 2, color = "red") +
     geom_point(size=0.3) +
     coord_cartesian(xlim=c(which_chrome_minX,which_chrome_maxX))+
     expand_limits(x = 0, y = 0)+
-    scale_x_continuous(expand = c(0, 0))+ scale_y_continuous(limits = c(-B_lim*1.2,B_lim*1.2),expand = c(0, 0))+
+    scale_x_continuous(expand = c(0, 0))+ scale_y_continuous(limits = c(-B_lim,B_lim),expand = c(0, 0))+
     labs(x=paste0("Chromosome ",which_chrome),y="Bio-primed\ncoefficient")+
     theme_classic() +
     scale_color_manual(guide='none', breaks=c(1:22,"beta_pen","both","beta"),
@@ -175,8 +218,15 @@ plot_manhattan2 <- function(gene="PRMT5",resIn='demeter2_PRMT5_CNV_omic.RData',s
     #            aes(label = gene, color = betalogic , size = abs(betas)))+
     # geom_text(data = aframe[which(!is.na(aframe$betalogic )&aframe$betalogic !='beta'),],
     #            aes(label = gene, color = betalogic , size = abs(betas_pen)))+theme(legend.position ="none")
-    geom_text(check_overlap = T,data = aframe[which(aframe$gene =='GAB2'),],
-               aes(label = gene, color = betalogic , size = abs(betas_pen)))+theme(legend.position ="none")
+    # geom_text(check_overlap = T,data = bframe,
+    #            aes(label = gene, color = betalogic , size = abs(betas_pen)))+theme(legend.position ="none")
+    ggrepel::geom_text_repel(#point.padding = .5,
+      min.segment.length = 0,
+      force=1,direction='both',max.overlaps=100,
+      max.time = .3, max.iter = 1e5,#box.padding = 0,
+      data =aframe[!is.na(aframe$betalogic),],
+      aes(label = gene, color = betalogic,size=betasize))+
+    scale_size(guide = 'none')
   
   Fig3B <- gridExtra::grid.arrange(plo3b_cor, plo3b_b,plo3b_bp, ncol=1)
   ggsave(filename = paste0("../Outputs/graphics/Fig3B_boxplot_",gene,"_",omic,".pdf"),plot = Fig3B,width = 6,height = 4)
@@ -289,7 +339,8 @@ X_rna <- X
 
 # Define CNV table ####
 X_cnv <- cnv
-X_cnv <- na.omit(log2(X_cnv))
+# X_cnv <- na.omit(log2(X_cnv))
+X_cnv <- na.omit(X_cnv)
 # offsetlog2 <- max(log2(cnv[which(cnv>2)]))+0.2
 # X_cnv[which(cnv<2)] <- cnv[which(cnv<2)] +2^(-offsetlog2)*(2-cnv[which(cnv<2)] )
 
@@ -472,10 +523,10 @@ ggsave(filename = paste0("../Outputs/graphics/StackCorBetas_",gene,"_",gene2,".p
 
 
 
-# EGFR ####
+# EGFR (figures 3) ####
 {
 # plot_gene(gene = "EGFR")
-plot_manhattan2(gene = "EGFR",resIn = "../Outputs/demeter2_EGFR_CNV_omic.RData")
+plot_manhattan2(gene = "EGFR",resIn = "../Outputs/demeter2_EGFR_CNV_omic.RData",subplotChr = 11)
 
 d2_EGFR<- demeter2[,'EGFR']
 egfr_cnv <- X_cnv[,"EGFR"]
@@ -487,7 +538,7 @@ ggplot(data.frame(d2=d2_EGFR,x=egfr_cnv),aes(x=x,y=d2))+geom_point()+
   geom_point() +
   ggpubr::stat_cor(label.sep='\n') +
   theme_classic() +
-  labs(x="EGRF [log2(CNV)]",y="EGFR dependency [D2]")
+  labs(x="EGRF (CNV)",y="EGFR dependency [D2]")
 ggsave(filename = paste0("../Outputs/FigS4_CNV_EGFRvsD2.pdf"),height=4,width=4)
 
 }
@@ -497,16 +548,22 @@ ggsave(filename = paste0("../Outputs/FigS4_CNV_EGFRvsD2.pdf"),height=4,width=4)
 plot_manhattan2(gene = "DMAP1",resIn = "../Outputs/demeter2_DMAP1_CNV_omic.RData")
 ## Fig 4B ####
   for(gene in 'DMAP1'){
-  res <- extractorRData("../Outputs/demeter2_DMAP1_CNV_omic.RData",'results_omic')
-  basB <- rownames(res$betas)[which(res$betas$betas!=0)]
-  bioB <- rownames(res$betas)[which(res$betas$betas_pen!=0)]
+    res <- extractorRData("../Outputs/demeter2_DMAP1_CNV_omic.RData",'results_omic')
+    # only hits in demeter2
+    res_betas <- res$betas[rownames(res$betas)%in%colnames(demeter2),]
+    # only positive betas
+    basB <- res_betas[which(res_betas$betas>0),];basB<- rownames(basB)[order(basB$betas,decreasing = T)][1:20];basB <- basB[!is.na(basB)]
+    bioB <- res_betas[which(res_betas$betas_pen>0),];bioB <- rownames(bioB)[order(bioB$betas_pen,decreasing = T)][1:20];bioB <- bioB[!is.na(bioB)]
+  # not the gene of interest
   basB <-basB[!basB%in%gene]
   bioB <-bioB[!bioB%in%gene]
-  # boxplot
-  # all hits
-  bioB <- bioB[bioB%in%colnames(demeter2)]
-  basB <- basB[basB%in%colnames(demeter2)]
 
+  # unique to process
+  commonB <- intersect(basB,bioB)
+  # basBU <- basB[!basB%in% commonB]
+  # bioBU <- bioB[!bioB%in% commonB]
+  # boxplot
+  # ALL TOP 20 
   cor_pen <- cor(
     demeter2[, bioB], demeter2[, gene],
     use = "pairwise.complete")[,1]
@@ -518,17 +575,6 @@ plot_manhattan2(gene = "DMAP1",resIn = "../Outputs/demeter2_DMAP1_CNV_omic.RData
               rep("Baseline", length(cor_reg))),
     cor = c(cor_pen, cor_reg),
     gene=c(names(cor_pen),names(cor_reg)))
-  ggplot(aframe, aes(x=class,cor, color = class)) +
-    labs(
-      x = "Co-dependency with target",
-      y = "Percentile",
-      color="Process"
-      ) +
-    geom_hline(yintercept = 0,linetype='dashed')+
-    geom_boxplot() +
-    theme_classic()
-  ggsave(filename = paste0("../Outputs/graphics/FigS4C_boxplt_codep_DMAP1vsbiomarkers.pdf"),height=4,width=4)
-  # boxplot
   ggplot(aframe, aes(class, cor, label = gene)) +
     labs(
       y = "Correlation (r)\nDependency DMAP1 [D2] vs biomarker [D2]",
@@ -536,86 +582,122 @@ plot_manhattan2(gene = "DMAP1",resIn = "../Outputs/demeter2_DMAP1_CNV_omic.RData
       color="Process") +
     geom_hline(yintercept = 0, linetype = 2) +
     geom_boxplot(outlier.colour = NA) +
-    geom_jitter(width = 0.1) +
-    ggrepel::geom_text_repel(max.overlaps = 100, aes(color = class)) +
-    scale_color_manual(values = c("red", "blue")) +
+    geom_jitter(width = 0,alpha=0.5) +
+    # ggrepel::geom_text_repel(max.overlaps = 100, aes(color = class)) +
+    ggrepel::geom_text_repel(#point.padding = .5,
+      min.segment.length = 0,
+      force=1,direction='both',max.overlaps=100,
+      max.time = .3, max.iter = 1e5,#box.padding = 0,
+      # data = res[which(abs(res$betas)>=quantile(abs(res$betas),.9) | abs(res$betas_pen)>=quantile(abs(res$betas_pen),.9)),],
+      aes(label = gene, color = class),size=3) +
+    scale_color_manual(guide = 'none',values = c("red", "blue")) +
     theme_classic()
-  ggsave(filename = paste0("../Outputs/graphics/FigS4B_codep_DMAP1vsbiomarkers.pdf"),height=4,width=4)
-  
-  # unique to lasso
-  bioB <- bioB[!bioB%in%basB][bioB[!bioB%in%basB]%in%colnames(demeter2)]
-  basB <- basB[!basB%in%bioB][basB[!basB%in%bioB]%in%colnames(demeter2)]
-  
-  cor_pen <- cor(
-    demeter2[, bioB], demeter2[, gene],
-    use = "pairwise.complete")[,1]
-  cor_reg <- cor(
-    demeter2[, basB], demeter2[, gene],
-    use = "pairwise.complete")[,1]
-  
-  # # wilcox rank sum test
-  # wilcox.test(cor_pen, cor_reg)
-  
-  aframe <- data.frame(
-    class = c(rep("Bio-Primed", length(cor_pen)),
-              rep("Baseline", length(cor_reg))),
-    cor = c(cor_pen, cor_reg),
-    gene=c(names(cor_pen),names(cor_reg)))
-  # ECDF
-  ggplot(aframe, aes(cor, color = class)) +
-    labs(
-      x = "Co-dependency with target",
-      y = "Percentile",
-      color="Unique gene\nto process"
-    ) +
-    stat_ecdf() +
-    xlim(-0.3, 0.3) +
-    theme_classic()
-  ggsave(filename = paste0("../Outputs/graphics/Fig4D_boxplt_codep_DMAP1vsbiomarkers.pdf"),height=4,width=4)
+  ggsave(filename = paste0("../Outputs/graphics/FigS4B_boxplt_codep_DMAP1vs20biomarkers.pdf"),height=4,width=4)
   # boxplot
-  ggplot(aframe, aes(class, cor, label = gene)) +
+  ggplot(aframe[!aframe$gene%in%commonB,], aes(class, cor, label = gene)) +
     labs(
       y = "Correlation (r)\nDependency DMAP1 [D2] vs biomarker [D2]",
       x = "Biomarkers derived from process",
-      color="Process"
-    ) +
+      color="Process") +
     geom_hline(yintercept = 0, linetype = 2) +
     geom_boxplot(outlier.colour = NA) +
-    geom_jitter(width = 0.1) +
-    ggrepel::geom_text_repel(max.overlaps = 100, aes(color = class)) +
-    scale_color_manual(values = c("red", "blue")) +
+    geom_jitter(width = 0,alpha=0.5) +
+    # ggrepel::geom_text_repel(max.overlaps = 100, aes(color = class)) +
+    ggrepel::geom_text_repel(#point.padding = .5,
+      min.segment.length = 0,
+      force=1,direction='both',max.overlaps=100,
+      max.time = .3, max.iter = 1e5,#box.padding = 0,
+      # data = res[which(abs(res$betas)>=quantile(abs(res$betas),.9) | abs(res$betas_pen)>=quantile(abs(res$betas_pen),.9)),],
+      aes(label = gene, color = class),size=3) +
+    scale_color_manual(guide = 'none',values = c("red", "blue")) +
     theme_classic()
-  ggsave(filename = paste0("../Outputs/graphics/Fig4B_codep_DMAP1vsbiomarkers.pdf"),height=4,width=4)
+  ggsave(filename = paste0("../Outputs/graphics/Fig4B_codep_DMAP1vs20UniBiomarkers.pdf"),height=4,width=4)
+  
+  # # unique to lasso
+  # bioB <- bioB[!bioB%in%basB][bioB[!bioB%in%basB]%in%colnames(demeter2)]
+  # basB <- basB[!basB%in%bioB][basB[!basB%in%bioB]%in%colnames(demeter2)]
+  # 
+  # cor_pen <- cor(
+  #   demeter2[, bioB], demeter2[, gene],
+  #   use = "pairwise.complete")[,1]
+  # cor_reg <- cor(
+  #   demeter2[, basB], demeter2[, gene],
+  #   use = "pairwise.complete")[,1]
+  # 
+  # # # wilcox rank sum test
+  # # wilcox.test(cor_pen, cor_reg)
+  # 
+  # aframe <- data.frame(
+  #   class = c(rep("Bio-Primed", length(cor_pen)),
+  #             rep("Baseline", length(cor_reg))),
+  #   cor = c(cor_pen, cor_reg),
+  #   gene=c(names(cor_pen),names(cor_reg)))
+  # # # ECDF
+  # # ggplot(aframe, aes(cor, color = class)) +
+  # #   labs(
+  # #     x = "Co-dependency with target",
+  # #     y = "Percentile",
+  # #     color="Unique gene\nto process"
+  # #   ) +
+  # #   stat_ecdf() +
+  # #   xlim(-0.3, 0.3) +
+  # #   theme_classic()
+  # # ggsave(filename = paste0("../Outputs/graphics/Fig4D_boxplt_codep_DMAP1vsbiomarkers.pdf"),height=4,width=4)
+  # # boxplot
+  # ggplot(aframe, aes(class, cor, label = gene)) +
+  #   labs(
+  #     y = "Correlation (r)\nDependency DMAP1 [D2] vs biomarker [D2]",
+  #     x = "Biomarkers derived from process",
+  #     color="Process"
+  #   ) +
+  #   geom_hline(yintercept = 0, linetype = 2) +
+  #   geom_boxplot(outlier.colour = NA) +
+  #   geom_jitter(width = 0,alpha=0.5) +
+  #   ggrepel::geom_text_repel(#point.padding = .5,
+  #     min.segment.length = 0,
+  #     force=1,direction='both',max.overlaps=100,
+  #     max.time = .3, max.iter = 1e5,#box.padding = 0,
+  #     # data = res[which(abs(res$betas)>=quantile(abs(res$betas),.9) | abs(res$betas_pen)>=quantile(abs(res$betas_pen),.9)),],
+  #     aes(label = gene, color = class),size=2) +
+  #   scale_color_manual(values = c("red", "blue"),guide='none') +
+  #   theme_classic()
+  # ggsave(filename = paste0("../Outputs/graphics/Fig4B_codep_DMAP1vsbiomarkers.pdf"),height=4,width=4)
+  
+  
+  ## Fig C ####
+  two_2Bpen <- aframe[!aframe$gene%in%commonB,]
+  two_2Bpen <-two_2Bpen[which(two_2Bpen$class=="Bio-Primed"),]
+  figCbiomarker <- two_2Bpen[order(two_2Bpen$cor,decreasing = T)[1:2],'gene']
+  # against BRD8  CNV and D2 
+  # against MCRS1 CNV and D2
+  lapply(figCbiomarker,function(x){
+    d2_DMAP1<- demeter2[,'DMAP1']
+    # CNV
+    x_cnv <- X_cnv[,x]
+    x_cells <- intersect(names(d2_DMAP1),names(x_cnv))
+    d2_DMAP1 <- d2_DMAP1[x_cells]
+    x_cnv <-    x_cnv[x_cells]
+    ggplot(data.frame(d2=d2_DMAP1,x=x_cnv),aes(x=x,y=d2))+geom_point()+
+      geom_smooth(method = "lm",se=F) +
+      geom_point(alpha=0.75) +
+      ggpubr::stat_cor(label.sep='\n',method='spearman') +
+      theme_classic() +
+      labs(x=paste0(x," (CNV)"),y="DMAP1 dependency [D2]")
+    ggsave(filename = paste0("../Outputs/graphics/Fig4C_scatt_DMAP1_D2vs",x,"_CNV.pdf"),height=4,width=4)
+    # D2
+    d2_x <- demeter2[,x]
+    d2_DMAP1<- demeter2[,'DMAP1']
+    ggplot(data.frame(d2=d2_DMAP1,x=d2_x),aes(x=x,y=d2))+geom_point()+
+      geom_smooth(method = "lm",se=F) +
+      geom_point(alpha=0.75) +
+      ggpubr::stat_cor(label.sep='\n') +
+      theme_classic() +
+      labs(x=paste0(x," dependency [D2]"),y="")
+    ggsave(filename = paste0("../Outputs/graphics/Fig4C_scatt_DMAP1_D2vs",x,"_D2.pdf"),height=4,width=4)
+  })
   
   }
-## Fig C ####
- # against BRD8  CNV and D2 
- # against MCRS1 CNV and D2
-lapply(c("BRD8","MCRS1"),function(x){
-  d2_DMAP1<- demeter2[,'DMAP1']
-  # CNV
-  x_cnv <- X_cnv[,x]
-  x_cells <- intersect(names(d2_DMAP1),names(x_cnv))
-  d2_DMAP1 <- d2_DMAP1[x_cells]
-  x_cnv <-    x_cnv[x_cells]
-  ggplot(data.frame(d2=d2_DMAP1,x=x_cnv),aes(x=x,y=d2))+geom_point()+
-    geom_smooth(method = "lm",se=F) +
-    geom_point(alpha=0.75) +
-    ggpubr::stat_cor(label.sep='\n') +
-    theme_classic() +
-    labs(x=paste0(x," [log2(CNV)]"),y="DMAP1 dependency [D2]")
-  ggsave(filename = paste0("../Outputs/graphics/Fig4C_scatt_DMAP1_D2vs",x,"_CNV.pdf"),height=4,width=4)
-  # D2
-  d2_x <- demeter2[,x]
-  d2_DMAP1<- demeter2[,'DMAP1']
-  ggplot(data.frame(d2=d2_DMAP1,x=d2_x),aes(x=x,y=d2))+geom_point()+
-    geom_smooth(method = "lm",se=F) +
-    geom_point(alpha=0.75) +
-    ggpubr::stat_cor(label.sep='\n') +
-    theme_classic() +
-    labs(x=paste0(x," dependency [D2]"),y="")
-  ggsave(filename = paste0("../Outputs/graphics/Fig4C_scatt_DMAP1_D2vs",x,"_D2.pdf"),height=4,width=4)
-})
+
 
 ## Fig 4D ####
 
