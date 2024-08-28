@@ -1,6 +1,5 @@
 ## Bio-primed machine learning to enhance discovery of relevant biomarkers
 
-Method overview:
 <p align="middle">
   <img src="biolasso_overview.png" width="75%"/>
 </p>
