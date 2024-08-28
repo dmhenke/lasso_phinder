@@ -27,7 +27,7 @@ d2_genes <- scan(
 
 # Define CNV table ####
 X_cnv <- cnv
-X_cnv <- na.omit(log2(X_cnv))
+X_cnv <- na.omit(X_cnv)
 
 
 # Run for list of genes on D2 ####

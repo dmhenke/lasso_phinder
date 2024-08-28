@@ -404,3 +404,14 @@ p <- gridExtra::grid.arrange(p1, p2, ncol = 2)
 ggsave(
   p,
   filename = "../Outputs/brd8_dmap1.pdf", height = 5, width = 10)
+
+
+# Look for good examples ####
+tmp <- do.call(rbind, lapply(genes, function(gene){
+  load(paste0(
+    "/storage/thinc/git_repos/lasso_phinder/Outputs/cnv_d2/", gene,".RData"))
+  coef <- try(res$betas[gene, ])
+  if(class(coef) == "try-error") return(c(NA, NA))
+  coef
+}))
+
