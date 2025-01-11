@@ -8,3 +8,4 @@ Outputs/chr_results_multiomic.RData
 *.RData
 *.ai
 *.pdf
+Data/generifs_basic.gz

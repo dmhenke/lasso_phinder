@@ -1,6 +1,8 @@
 # Load R libs ####
 library(doc2vec)
 library(fgsea)
+library(umap)
+library(word2vec)
 
 
 # Load GO Mol Function ####
@@ -43,10 +45,26 @@ aframe <- data.frame(
   gene = names(asplit),
   terms = unlist(asplit))
 
+
+# Save output ####
 write.table(
   aframe,
   file = "/Users/lukas/Downloads/bioplanet_genesets.txt",
   quote = F, row.names = F, col.names = F, sep = "\t")
+
+
+# Load Generif ####
+tmp <- fread(
+  "/Users/lukas/OneDrive/Documents/GitHub/lasso_phinder/Data/generifs_basic.gz", 
+  sep = "\t")
+tmp <- tmp[tmp[["#Tax ID"]] == 9606, ]
+tmp <- tmp[-grep("(HuGE Navigator)", fixed = T, tmp[["GeneRIF text"]]),]
+tail(sort(table(tmp[["GeneRIF text"]])))
+
+generif <- tmp
+aframe <- data.frame(
+  gene = generif[["Gene ID"]],
+  terms = generif[["GeneRIF text"]])
 
 
 # Create doc2vec model ####
@@ -61,9 +79,10 @@ model <- paragraph2vec(
   min_count = 3, lr = 0.05, threads = 4)
 
 
+# Play around ####
 predict(
   model,
-  newdata = "MYC",
+  newdata = "28974",
   type = "embedding", which = "docs")
 
 predict(
@@ -76,7 +95,7 @@ predict(
   newdata = c("cancer"),
   type = "embedding", which = "words")
 
-sentences <- c("heat shock protein")
+sentences <- c("heat shock response")
 sentences <- setNames(sentences, sentences)
 sentences <- strsplit(sentences, split = " ")
 
@@ -84,27 +103,31 @@ similar <- predict(
   model,
   newdata = sentences,
   type = "nearest", which = "sent2doc", top_n = 100)
-head(similar[[1]], 10)
+similar <- similar[[1]]
+similar <- similar[sort.list(-similar$similarity), ]
+similar$gene <- gene_list$SYMBOL[match(similar$term2, gene_list$ENTREZID)]
+head(similar, 50)
 
 aframe$terms[aframe$gene == "BCS1L"]
 
+
+# Creat UMAP for a given word ####
+gene_list <- read.csv(
+  "/Users/lukas/OneDrive/Miko/THINC/projects/cmap/gene_symbols.csv")
 
 embedding <- as.matrix(model, which = "docs")
 
 coord <- predict(
   model,
-  newdata = "metabolism",
+  newdata = "splicing",
   type = "embedding", which = "words")
 
 embedding <- rbind(embedding, coord)
 rownames(embedding)[nrow(embedding)] <- "INPUT"
 
-library(umap)
-
 uData <- umap(embedding)
 subm <- data.frame(
   gene = rownames(embedding), uData$layout)
-
 
 ggplot(subm, aes(x = X1, y = X2)) +
   geom_point() +
@@ -116,6 +139,22 @@ ggplot(subm, aes(x = X1, y = X2)) +
     aes(label = gene, color = "blue")) +
   theme_minimal()
 
+distances <- proxy::dist(
+  uData$layout,
+  t(data.matrix(uData$layout[nrow(uData$layout), ]))
+)
 
-newdoc <- doc2vec(model, "i like busses with a toilet")
-word2vec_similarity(emb, newdoc)
+aframe <- data.frame(
+  dist = distances,
+  entrez = subm$gene,
+  gene = gene_list$SYMBOL[match(subm$gene, gene_list$ENTREZID)]
+)
+head(aframe[sort.list(aframe$dist), ], 40)
+
+output <- head(aframe$gene[sort.list(aframe$dist)], 50)
+write(
+  output, 
+  file = "/Users/lukas/Downloads/tmp.txt",
+  sep = "\n")
+
+
