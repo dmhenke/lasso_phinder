@@ -1,6 +1,9 @@
 # Load R libs ####
+library(data.table)
 library(doc2vec)
 library(fgsea)
+library(ggplot2)
+library(lsa)
 library(umap)
 library(word2vec)
 
@@ -75,14 +78,14 @@ db <- data.frame(doc_id = aframe$gene, text = text)
 
 model <- paragraph2vec(
   x = db,
-  type = "PV-DBOW", dim = 50, iter = 20, 
-  min_count = 3, lr = 0.05, threads = 4)
+  type = "PV-DBOW", dim = 100, iter = 20, 
+  min_count = 5, lr = 0.05, threads = 4)
 
 
 # Play around ####
 predict(
   model,
-  newdata = "28974",
+  newdata = "1",
   type = "embedding", which = "docs")
 
 predict(
@@ -95,7 +98,7 @@ predict(
   newdata = c("cancer"),
   type = "embedding", which = "words")
 
-sentences <- c("heat shock response")
+sentences <- c("RNA helicase")
 sentences <- setNames(sentences, sentences)
 sentences <- strsplit(sentences, split = " ")
 
@@ -106,20 +109,25 @@ similar <- predict(
 similar <- similar[[1]]
 similar <- similar[sort.list(-similar$similarity), ]
 similar$gene <- gene_list$SYMBOL[match(similar$term2, gene_list$ENTREZID)]
-head(similar, 50)
-
-aframe$terms[aframe$gene == "BCS1L"]
+head(similar, 30)
 
 
-# Creat UMAP for a given word ####
+# Load gene annotations ####
 gene_list <- read.csv(
   "/Users/lukas/OneDrive/Miko/THINC/projects/cmap/gene_symbols.csv")
 
+gene <- "KLHL22"
+gene_list$ENTREZID[gene_list$SYMBOL == gene]
+
+aframe[aframe$gene == "84861", ]
+
+# Creat UMAP for a given word ####
 embedding <- as.matrix(model, which = "docs")
 
+input <- "immune"
 coord <- predict(
   model,
-  newdata = "splicing",
+  newdata = input,
   type = "embedding", which = "words")
 
 embedding <- rbind(embedding, coord)
@@ -127,34 +135,116 @@ rownames(embedding)[nrow(embedding)] <- "INPUT"
 
 uData <- umap(embedding)
 subm <- data.frame(
-  gene = rownames(embedding), uData$layout)
+  id = rownames(embedding), uData$layout)
+
+subm$gene <- gene_list$SYMBOL[match(subm$id, gene_list$ENTREZID)]
+
+helicases <- union(
+  unique(gene_list$SYMBOL[grep("^DHX", gene_list$SYMBOL)]),
+  unique(gene_list$SYMBOL[grep("^DDX", gene_list$SYMBOL)]))
 
 ggplot(subm, aes(x = X1, y = X2)) +
-  geom_point() +
+  labs(
+    x = "UMAP 1",
+    y = "UMAP 2"
+  ) +
+  geom_point(alpha = 0.1) +
+  geom_point(
+    data = subm[subm$gene %in% helicases, ], color = "blue") +
+  ggrepel::geom_text_repel(
+    data = subm[subm$gene %in% helicases, ],
+    aes(label = gene), color = "blue",
+    max.overlaps = 100, size = 3) +
   geom_text(
-    data = subm[subm$gene == "FANCD2", ],
-    aes(label = gene, color = "red")) +
-  geom_text(
-    data = subm[subm$gene == "INPUT", ],
-    aes(label = gene, color = "blue")) +
-  theme_minimal()
+    data = subm[subm$id == "INPUT", ],
+    aes(label = input), color = "red", size = 5) +
+  theme_classic()
 
-distances <- proxy::dist(
-  uData$layout,
-  t(data.matrix(uData$layout[nrow(uData$layout), ]))
+
+# Calculate cosine distances ####
+dist <- apply(embedding, 1 , function(x)
+  cosine(x, embedding[nrow(embedding), ]))
+
+subm <- data.frame(
+  id = names(dist),
+  gene = gene_list$SYMBOL[match(names(dist), gene_list$ENTREZID)],
+  dist = dist)
+
+
+# Source biolasso ####
+source("/Users/lukas/OneDrive/Documents/GitHub/lasso_phinder/Code/allfunctions.R")
+
+
+# Load DepMap data ####
+load("/Users/lukas/OneDrive/Documents/GitHub/lasso_phinder/Data/global.RData")
+
+# Normalize RNA expression data ####
+X_cnv <- cnv
+X_cnv <- na.omit(X_cnv)
+X_cnv <- X_cnv[, apply(X_cnv, 2, var) > 0]
+X <- X_cnv
+
+X <- rnaseq
+expressed <- apply(X, 2, function(x) mean(x > 0))
+X <- X[, expressed > 0.95]
+X <- apply(X, 2, function(x)
+  (x - mean(x))/sd(x))
+
+
+# Define outcome ####
+gene <- "SF3B1"
+y <- demeter2[, gene]
+y <- y[!is.na(y)]
+
+
+# Run LASSO ####
+ok_cells <- intersect(
+  rownames(X),
+  names(y)
 )
+
+X <- X[ok_cells, ]
+y <- y[ok_cells]
+
+scores <- subm$dist
+names(scores) <- subm$gene
+scores <- (scores - min(scores)) / (max(scores) - min(scores))
+
+results <- run_reg_lasso(
+  X, y, scores,
+  n_folds = 10, phi_range = seq(0, 1, length = 30))
 
 aframe <- data.frame(
-  dist = distances,
-  entrez = subm$gene,
-  gene = gene_list$SYMBOL[match(subm$gene, gene_list$ENTREZID)]
-)
-head(aframe[sort.list(aframe$dist), ], 40)
+  gene = rownames(results$betas),
+  results$betas,
+  score = scores[match(rownames(results$betas), names(scores))],
+  cor = cor(X, y)[,1])
 
-output <- head(aframe$gene[sort.list(aframe$dist)], 50)
-write(
-  output, 
-  file = "/Users/lukas/Downloads/tmp.txt",
-  sep = "\n")
+ggplot(aframe, aes(
+  betas, betas_pen, 
+  color = cor)) +
+  labs(
+    x = "Baseline",
+    y = "Bio-primed"
+  ) +
+  ggrepel::geom_text_repel(
+    data = aframe[aframe$betas_pen != 0 |
+                    aframe$betas != 0, ],
+    aes(label = gene, size = score),
+    max.overlaps = 20
+  ) +
+  geom_point() +
+  scale_color_gradient2(
+    low = "blue", mid = "white", high = "red") +
+  theme_classic()
+
+subm <- data.frame(
+  cnv = X[, "WDR33"],
+  dep = y
+)
+ggplot(subm, aes(x = cnv, y = dep)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic()
 
 
