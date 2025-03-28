@@ -82,6 +82,11 @@ model <- paragraph2vec(
   min_count = 5, lr = 0.05, threads = 4)
 
 
+# Load gene annotations ####
+gene_list <- read.csv(
+  "/Users/lukas/OneDrive/Miko/THINC/projects/cmap/gene_symbols.csv")
+
+
 # Play around ####
 predict(
   model,
@@ -98,7 +103,7 @@ predict(
   newdata = c("cancer"),
   type = "embedding", which = "words")
 
-sentences <- c("RNA helicase")
+sentences <- c("breast cancer")
 sentences <- setNames(sentences, sentences)
 sentences <- strsplit(sentences, split = " ")
 
@@ -112,19 +117,17 @@ similar$gene <- gene_list$SYMBOL[match(similar$term2, gene_list$ENTREZID)]
 head(similar, 30)
 
 
-# Load gene annotations ####
-gene_list <- read.csv(
-  "/Users/lukas/OneDrive/Miko/THINC/projects/cmap/gene_symbols.csv")
-
+# Check some genes ####
 gene <- "KLHL22"
 gene_list$ENTREZID[gene_list$SYMBOL == gene]
 
-aframe[aframe$gene == "84861", ]
+db[db$doc_id == "641384", ]
 
-# Creat UMAP for a given word ####
+
+# Create UMAP for a given word ####
 embedding <- as.matrix(model, which = "docs")
 
-input <- "immune"
+input <- "cancer"
 coord <- predict(
   model,
   newdata = input,
@@ -177,6 +180,7 @@ source("/Users/lukas/OneDrive/Documents/GitHub/lasso_phinder/Code/allfunctions.R
 
 # Load DepMap data ####
 load("/Users/lukas/OneDrive/Documents/GitHub/lasso_phinder/Data/global.RData")
+
 
 # Normalize RNA expression data ####
 X_cnv <- cnv
